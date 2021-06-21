@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: passwordstate-operator
+  labels:
+    app: passwordstate-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: passwordstate-operator
+  template:
+    metadata:
+      labels:
+        app: passwordstate-operator
+    spec:
+      containers:
+        - name: passwordstate-operator
+          image: %%image%%

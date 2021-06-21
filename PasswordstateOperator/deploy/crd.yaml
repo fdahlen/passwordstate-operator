@@ -1,0 +1,32 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: passwordlist.passwordstate.operator
+spec:
+  group: passwordstate.operator
+  scope: Namespaced
+  names:
+    plural: passwordlists
+    singular: passwordlist
+    kind: PasswordList
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: "A request for a password list from PasswordState"
+          properties:
+            spec:
+              type: object
+              properties:
+                serverbaseurl:
+                  type: string
+                passwordlistid:
+                  type: string
+                apikeysecret:
+                  type: string
+                passwordssecret:
+                  type: string
+              required: ["serverbaseurl","passwordlistid", "apikeysecret", "passwordssecret"]
