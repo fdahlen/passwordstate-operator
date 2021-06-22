@@ -8,10 +8,9 @@ namespace PasswordstateOperator
     {
         public static void Main(string[] args)
         {
-            //TODO: extract current state to separate class
-            //TODO: replace thread lock() with SemaphoreSlim (with narrower locking if possible) 
-            //TODO: change to async/await
-            //TODO: work on trigger for refresh: flag in crd? feature toggle for polling? 
+            //TODO: test run in cluster
+            //TODO: crd field to trigger refresh
+            //TODO: crd field for enabling polling 
 
             CreateHostBuilder(args)
                 .Build()

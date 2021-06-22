@@ -15,6 +15,8 @@ namespace PasswordstateOperator
 
         public const string Kind = "PasswordList";
 
+        public string ID => $"{this.Namespace()}/{this.Name()}";
+
         public V1ObjectMeta Metadata { get; set; }
 
         public string StatusAnnotationName => string.Format(ApiGroup + "/" + Singular + "-status");

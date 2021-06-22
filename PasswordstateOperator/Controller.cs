@@ -58,16 +58,9 @@ namespace PasswordstateOperator
 
       try
       {
-        while (!stoppingToken.IsCancellationRequested)
+        while (!await IsCRDAvailable() && !stoppingToken.IsCancellationRequested)
         {
-          if (!await IsCRDAvailable())
-          {
-            await Task.Delay(ReconciliationCheckIntervalSeconds * 1000);
-          }
-          else
-          {
-            break;
-          }
+          await Task.Delay(ReconciliationCheckIntervalSeconds * 1000);
         }
 
         StartWatcher();
@@ -123,28 +116,28 @@ namespace PasswordstateOperator
       watcher.Dispose();
     }
 
-    private async void OnChange(WatchEventType type, PasswordListCrd item)
+    private async void OnChange(WatchEventType type, PasswordListCrd crd)
     {
-      logger.LogWarning($"{nameof(Controller)}: {nameof(OnChange)}: {nameof(PasswordListCrd)} '{item.Name()}' event {(object) type} in namespace {item.Namespace()}");
+      logger.LogWarning($"{nameof(Controller)}: {nameof(OnChange)}: {nameof(PasswordListCrd)} '{crd.ID}' event {(object) type} in namespace {crd.Namespace()}");
       
       try
       {
         switch (type)
         {
           case WatchEventType.Added:
-            await handler.OnAdded(kubernetes, item);
+            await handler.OnAdded(kubernetes, crd);
             break;
           case WatchEventType.Modified:
-            await handler.OnUpdated(kubernetes, item);
+            await handler.OnUpdated(kubernetes, crd);
             break;
           case WatchEventType.Deleted:
-            await handler.OnDeleted(kubernetes, item);
+            await handler.OnDeleted(kubernetes, crd);
             break;
           case WatchEventType.Error:
-            await handler.OnError(kubernetes, item);
+            await handler.OnError(kubernetes, crd);
             break;
           case WatchEventType.Bookmark:
-            await handler.OnBookmarked(kubernetes, item);
+            await handler.OnBookmarked(kubernetes, crd);
             break;
           default:
             throw new ArgumentOutOfRangeException(nameof(type), type, null);
@@ -152,7 +145,7 @@ namespace PasswordstateOperator
       }
       catch (Exception ex)
       {
-        logger.LogError(ex, $"{nameof(Controller)}: {nameof(OnChange)}: Exception for {nameof(PasswordListCrd)} '{item.Name()}' event {(object) type} in namespace {item.Namespace()}");
+        logger.LogError(ex, $"{nameof(Controller)}: {nameof(OnChange)}: Exception for {nameof(PasswordListCrd)} '{crd.Name()}' event {(object) type} in namespace {crd.Namespace()}");
       }
     }
 
