@@ -4,7 +4,7 @@ RUN mkdir /src
 WORKDIR /src
 COPY . /src
 
-RUN cd PasswordstateOperator && dotnet publish --configuration Release -o out
+RUN dotnet publish --configuration Release -o out PasswordstateOperator/PasswordstateOperator.csproj
 
 FROM mcr.microsoft.com/dotnet/runtime:5.0 as runtime
 
