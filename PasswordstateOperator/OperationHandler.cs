@@ -154,6 +154,7 @@ namespace PasswordstateOperator
             catch (Exception e)
             {
                 logger.LogError(e, $"{nameof(CreatePasswordsSecret)}: {crd.ID}: Got exception, will not create secret '{crd.Spec.PasswordsSecret}'");
+                currentState.Add(crd.ID, new State.Entry(crd, 0));
                 return;
             }
 
