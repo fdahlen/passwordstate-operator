@@ -88,7 +88,8 @@ namespace PasswordstateOperator
           PasswordListCrd.ApiGroup,
           PasswordListCrd.ApiVersion,
           k8sNamespace,
-          PasswordListCrd.Plural)
+          PasswordListCrd.Plural,
+          watch: true)
         .Watch(
           new Action<WatchEventType, PasswordListCrd>(OnChange),
           OnError,
