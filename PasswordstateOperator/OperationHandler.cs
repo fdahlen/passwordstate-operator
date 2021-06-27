@@ -48,9 +48,15 @@ namespace PasswordstateOperator
         
         private async Task DeletePasswordsSecret(Kubernetes k8s, PasswordListCrd crd)
         {
-            await k8s.DeleteNamespacedSecretAsync(crd.Spec.PasswordsSecret, crd.Namespace());
-            
-            logger.LogInformation($"{nameof(DeletePasswordsSecret)}: {crd.ID}: deleted '{crd.Spec.PasswordsSecret}'");
+            try
+            {
+                await k8s.DeleteNamespacedSecretAsync(crd.Spec.PasswordsSecret, crd.Namespace());
+                logger.LogInformation($"{nameof(DeletePasswordsSecret)}: {crd.ID}: deleted '{crd.Spec.PasswordsSecret}'");
+            }
+            catch (HttpOperationException hoex) when (hoex.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                logger.LogWarning($"{nameof(DeletePasswordsSecret)}: {crd.ID}: could not delete because not found in k8s '{crd.Spec.PasswordsSecret}'");
+            }
 
             if (!currentState.TryRemove(crd.ID))
             {
