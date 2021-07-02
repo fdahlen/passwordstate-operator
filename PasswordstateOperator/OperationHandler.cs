@@ -8,6 +8,7 @@ using k8s;
 using k8s.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Rest;
+using PasswordstateOperator.Cache;
 using PasswordstateOperator.Passwordstate;
 
 namespace PasswordstateOperator
@@ -18,7 +19,7 @@ namespace PasswordstateOperator
         private DateTimeOffset previousSyncTime = DateTimeOffset.UtcNow;
         
         private readonly ILogger<OperationHandler> logger;
-        private readonly State currentState = new();
+        private readonly CacheManager cacheManager = new();
         private readonly PasswordstateSdk passwordstateSdk;
 
         public OperationHandler(ILogger<OperationHandler> logger, PasswordstateSdk passwordstateSdk)
@@ -31,7 +32,8 @@ namespace PasswordstateOperator
         {
             logger.LogInformation($"{nameof(OnAdded)}: {crd.Id}");
 
-            await currentState.GuardedRun(crd.Id, async () => await CreatePasswordsSecret(k8s, crd));
+            using var cacheLock = await cacheManager.GetLock(crd.Id);
+            await CreatePasswordsSecret(k8s, crd, cacheLock);
         }
 
         public Task OnBookmarked(IKubernetes k8s, PasswordListCrd crd)
@@ -45,10 +47,11 @@ namespace PasswordstateOperator
         {
             logger.LogInformation($"{nameof(OnDeleted)}: {crd.Id}");
 
-            await currentState.GuardedRun(crd.Id, async () => await DeletePasswordsSecret(k8s, crd));
+            using var cacheLock = await cacheManager.GetLock(crd.Id);
+            await DeletePasswordsSecret(k8s, crd, cacheLock);
         }
         
-        private async Task DeletePasswordsSecret(IKubernetes k8s, PasswordListCrd crd)
+        private async Task DeletePasswordsSecret(IKubernetes k8s, PasswordListCrd crd, CacheLock cacheLock)
         {
             try
             {
@@ -60,9 +63,9 @@ namespace PasswordstateOperator
                 logger.LogWarning($"{nameof(DeletePasswordsSecret)}: {crd.Id}: could not delete because not found in k8s '{crd.Spec.PasswordsSecret}'");
             }
 
-            if (!currentState.TryRemove(crd.Id))
+            if (!cacheLock.TryRemoveFromCache())
             {
-                throw new ApplicationException($"Failed to remove from state: {crd.Id}");
+                throw new ApplicationException($"Failed to remove from cache: {crd.Id}");
             }
         }
 
@@ -77,28 +80,30 @@ namespace PasswordstateOperator
         {
             logger.LogInformation($"{nameof(OnUpdated)}: {newCrd.Id}");
 
-            await currentState.GuardedRun(newCrd.Id, async () => await UpdatePasswordsSecretIfRequired(k8s, newCrd));
+            using var cacheLock = await cacheManager.GetLock(newCrd.Id);
+            await UpdatePasswordsSecretIfRequired(k8s, newCrd, cacheLock);
         }
 
         public async Task CheckCurrentState(IKubernetes k8s)
         {
             logger.LogInformation(nameof(CheckCurrentState));
 
-            foreach (var id in currentState.GetIds())
+            foreach (var id in cacheManager.GetCachedIds())
             {
-                await currentState.GuardedRun(id, async () => await CheckCurrentStateForCrd(k8s, id));
+                using var cacheLock = await cacheManager.GetLock(id);
+                await CheckCurrentStateForCrd(k8s, id, cacheLock);
             }
         }
         
-        private async Task CheckCurrentStateForCrd(IKubernetes k8s, string id)
+        private async Task CheckCurrentStateForCrd(IKubernetes k8s, string id, CacheLock cacheLock)
         {
-            if (!currentState.TryGet(id, out var state))
+            if (!cacheLock.TryGetFromCache(out var cacheEntry))
             {
                 logger.LogWarning($"{nameof(CheckCurrentStateForCrd)}: {id}: expected existing crd but none found, will skip");
                 return;
             }
 
-            var crd = state.Crd;
+            var crd = cacheEntry.Crd;
             
             //TODO: should sync also detect changes in Spec?
 
@@ -107,7 +112,7 @@ namespace PasswordstateOperator
             {
                 logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: does not exist, will create");
 
-                await CreatePasswordsSecret(k8s, crd);
+                await CreatePasswordsSecret(k8s, crd, cacheLock);
             }
             else
             {
@@ -119,7 +124,7 @@ namespace PasswordstateOperator
 
                     logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: {PasswordstateSyncIntervalSeconds}s has passed, will sync with Passwordstate");
 
-                    await SyncWithPasswordstate(k8s, crd, state.PasswordsHashCode);
+                    await SyncWithPasswordstate(k8s, crd, cacheEntry.PasswordsHashCode);
                 }
             }
         }
@@ -150,7 +155,7 @@ namespace PasswordstateOperator
             }
         }
 
-        private async Task CreatePasswordsSecret(IKubernetes k8s, PasswordListCrd crd)
+        private async Task CreatePasswordsSecret(IKubernetes k8s, PasswordListCrd crd, CacheLock cacheLock)
         {
             PasswordListResponse passwords;
             int hashCode;
@@ -162,14 +167,14 @@ namespace PasswordstateOperator
             catch (Exception e)
             {
                 logger.LogError(e, $"{nameof(CreatePasswordsSecret)}: {crd.Id}: Got exception, will not create secret '{crd.Spec.PasswordsSecret}'");
-                currentState.Add(crd.Id, new State.Entry(crd, 0));
+                cacheLock.AddToCache(new CacheEntry(crd, 0));
                 return;
             }
 
             var passwordsSecret = CreateSecretFromResponse(crd, passwords);
             await k8s.CreateNamespacedSecretAsync(passwordsSecret, crd.Namespace());
 
-            currentState.Add(crd.Id, new State.Entry(crd, hashCode));
+            cacheLock.AddToCache(new CacheEntry(crd, hashCode));
 
             logger.LogInformation($"{nameof(CreatePasswordsSecret)}: {crd.Id}: created '{crd.Spec.PasswordsSecret}'");
         }
@@ -247,16 +252,16 @@ namespace PasswordstateOperator
             return Regex.Replace(secretKey, "[^A-Za-z0-9_-.]", "").ToLower();
         }
 
-        private async Task UpdatePasswordsSecretIfRequired(IKubernetes k8s, PasswordListCrd newCrd)
+        private async Task UpdatePasswordsSecretIfRequired(IKubernetes k8s, PasswordListCrd newCrd, CacheLock cacheLock)
         {
-            if (!currentState.TryGet(newCrd.Id, out var state))
+            if (!cacheLock.TryGetFromCache(out var cacheEntry))
             {
                 logger.LogWarning($"{nameof(OnUpdated)}: {newCrd.Id}: expected existing crd but none found, will create new");
-                await CreatePasswordsSecret(k8s, newCrd);
+                await CreatePasswordsSecret(k8s, newCrd, cacheLock);
                 return;
             }
             
-            var currentCrd = state.Crd;
+            var currentCrd = cacheEntry.Crd;
             
             if (currentCrd.Spec.ToString() == newCrd.Spec.ToString())
             {
@@ -265,8 +270,8 @@ namespace PasswordstateOperator
 
             logger.LogInformation($"{nameof(OnUpdated)}: {newCrd.Id}: detected updated crd, will delete existing and create new");
 
-            await DeletePasswordsSecret(k8s, currentCrd);
-            await CreatePasswordsSecret(k8s, newCrd);
+            await DeletePasswordsSecret(k8s, currentCrd, cacheLock);
+            await CreatePasswordsSecret(k8s, newCrd, cacheLock);
         }
     }
 }
