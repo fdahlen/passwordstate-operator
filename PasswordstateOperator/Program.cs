@@ -1,4 +1,3 @@
-using k8s;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -12,8 +11,6 @@ namespace PasswordstateOperator
         public static void Main(string[] args)
         {
             //TODO: test run in cluster
-            //TODO: crd field to trigger refresh
-            //TODO: crd field for enabling polling 
             //TODO: unit tests 
             //TODO: refactor operation handler into smaller parts 
 
