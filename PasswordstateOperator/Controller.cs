@@ -119,7 +119,7 @@ namespace PasswordstateOperator
 
     private async void OnChange(WatchEventType type, PasswordListCrd crd)
     {
-      logger.LogWarning($"{nameof(Controller)}: {nameof(OnChange)}: {nameof(PasswordListCrd)} '{crd.ID}' event {(object) type} in namespace {crd.Namespace()}");
+      logger.LogWarning($"{nameof(Controller)}: {nameof(OnChange)}: {nameof(PasswordListCrd)} '{crd.Id}' event {(object) type} in namespace {crd.Namespace()}");
       
       try
       {

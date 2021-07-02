@@ -8,7 +8,7 @@ using k8s;
 using k8s.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Rest;
-using RestSharp;
+using PasswordstateOperator.Passwordstate;
 
 namespace PasswordstateOperator
 {
@@ -19,31 +19,33 @@ namespace PasswordstateOperator
         
         private readonly ILogger<OperationHandler> logger;
         private readonly State currentState = new();
+        private readonly PasswordstateSdk passwordstateSdk;
 
-        public OperationHandler(ILogger<OperationHandler> logger)
+        public OperationHandler(ILogger<OperationHandler> logger, PasswordstateSdk passwordstateSdk)
         {
             this.logger = logger;
+            this.passwordstateSdk = passwordstateSdk;
         }
 
         public async Task OnAdded(IKubernetes k8s, PasswordListCrd crd)
         {
-            logger.LogInformation($"{nameof(OnAdded)}: {crd.ID}");
+            logger.LogInformation($"{nameof(OnAdded)}: {crd.Id}");
 
-            await currentState.GuardedRun(crd.ID, async () => await CreatePasswordsSecret(k8s, crd));
+            await currentState.GuardedRun(crd.Id, async () => await CreatePasswordsSecret(k8s, crd));
         }
 
         public Task OnBookmarked(IKubernetes k8s, PasswordListCrd crd)
         {
-             logger.LogInformation($"{nameof(OnBookmarked)}: {crd.ID}");
+             logger.LogInformation($"{nameof(OnBookmarked)}: {crd.Id}");
 
             return Task.CompletedTask;
         }
 
         public async Task OnDeleted(IKubernetes k8s, PasswordListCrd crd)
         {
-            logger.LogInformation($"{nameof(OnDeleted)}: {crd.ID}");
+            logger.LogInformation($"{nameof(OnDeleted)}: {crd.Id}");
 
-            await currentState.GuardedRun(crd.ID, async () => await DeletePasswordsSecret(k8s, crd));
+            await currentState.GuardedRun(crd.Id, async () => await DeletePasswordsSecret(k8s, crd));
         }
         
         private async Task DeletePasswordsSecret(IKubernetes k8s, PasswordListCrd crd)
@@ -51,31 +53,31 @@ namespace PasswordstateOperator
             try
             {
                 await k8s.DeleteNamespacedSecretAsync(crd.Spec.PasswordsSecret, crd.Namespace());
-                logger.LogInformation($"{nameof(DeletePasswordsSecret)}: {crd.ID}: deleted '{crd.Spec.PasswordsSecret}'");
+                logger.LogInformation($"{nameof(DeletePasswordsSecret)}: {crd.Id}: deleted '{crd.Spec.PasswordsSecret}'");
             }
             catch (HttpOperationException hoex) when (hoex.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                logger.LogWarning($"{nameof(DeletePasswordsSecret)}: {crd.ID}: could not delete because not found in k8s '{crd.Spec.PasswordsSecret}'");
+                logger.LogWarning($"{nameof(DeletePasswordsSecret)}: {crd.Id}: could not delete because not found in k8s '{crd.Spec.PasswordsSecret}'");
             }
 
-            if (!currentState.TryRemove(crd.ID))
+            if (!currentState.TryRemove(crd.Id))
             {
-                throw new ApplicationException($"Failed to remove from state: {crd.ID}");
+                throw new ApplicationException($"Failed to remove from state: {crd.Id}");
             }
         }
 
         public Task OnError(IKubernetes k8s, PasswordListCrd crd)
         {
-            logger.LogError($"{nameof(OnError)}: {crd.ID}");
+            logger.LogError($"{nameof(OnError)}: {crd.Id}");
 
             return Task.CompletedTask;
         }
 
         public async Task OnUpdated(IKubernetes k8s, PasswordListCrd newCrd)
         {
-            logger.LogInformation($"{nameof(OnUpdated)}: {newCrd.ID}");
+            logger.LogInformation($"{nameof(OnUpdated)}: {newCrd.Id}");
 
-            await currentState.GuardedRun(newCrd.ID, async () => await UpdatePasswordsSecretIfRequired(k8s, newCrd));
+            await currentState.GuardedRun(newCrd.Id, async () => await UpdatePasswordsSecretIfRequired(k8s, newCrd));
         }
 
         public async Task CheckCurrentState(IKubernetes k8s)
@@ -103,19 +105,19 @@ namespace PasswordstateOperator
             var passwordsSecret = await GetPasswordsSecret(k8s, crd);
             if (passwordsSecret == null)
             {
-                logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.ID}: does not exist, will create");
+                logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: does not exist, will create");
 
                 await CreatePasswordsSecret(k8s, crd);
             }
             else
             {
-                logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.ID}: exists");
+                logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: exists");
 
                 if (DateTimeOffset.UtcNow > previousSyncTime.AddSeconds(PasswordstateSyncIntervalSeconds))
                 {
                     previousSyncTime = DateTimeOffset.UtcNow;
 
-                    logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.ID}: {PasswordstateSyncIntervalSeconds}s has passed, will sync with Passwordstate");
+                    logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: {PasswordstateSyncIntervalSeconds}s has passed, will sync with Passwordstate");
 
                     await SyncWithPasswordstate(k8s, crd, state.PasswordsHashCode);
                 }
@@ -128,9 +130,9 @@ namespace PasswordstateOperator
 
             if (newHashCode != currentHashCode)
             {
-                var newPasswordsSecret = CreateFrom(newPasswords, crd.Spec.PasswordsSecret);
+                var newPasswordsSecret = CreateSecretFromResponse(crd, newPasswords);
 
-                logger.LogInformation($"{nameof(SyncWithPasswordstate)}: {crd.ID}: detected changed password list in Passwordstate, will update password secret '{crd.Spec.PasswordsSecret}'");
+                logger.LogInformation($"{nameof(SyncWithPasswordstate)}: {crd.Id}: detected changed password list in Passwordstate, will update password secret '{crd.Spec.PasswordsSecret}'");
 
                 await k8s.ReplaceNamespacedSecretAsync(newPasswordsSecret, crd.Spec.PasswordsSecret, crd.Namespace());
             }
@@ -150,7 +152,7 @@ namespace PasswordstateOperator
 
         private async Task CreatePasswordsSecret(IKubernetes k8s, PasswordListCrd crd)
         {
-            List<PasswordstatePassword> passwords;
+            PasswordListResponse passwords;
             int hashCode;
             
             try
@@ -159,20 +161,20 @@ namespace PasswordstateOperator
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"{nameof(CreatePasswordsSecret)}: {crd.ID}: Got exception, will not create secret '{crd.Spec.PasswordsSecret}'");
-                currentState.Add(crd.ID, new State.Entry(crd, 0));
+                logger.LogError(e, $"{nameof(CreatePasswordsSecret)}: {crd.Id}: Got exception, will not create secret '{crd.Spec.PasswordsSecret}'");
+                currentState.Add(crd.Id, new State.Entry(crd, 0));
                 return;
             }
 
-            var passwordsSecret = CreateFrom(passwords, crd.Spec.PasswordsSecret);
+            var passwordsSecret = CreateSecretFromResponse(crd, passwords);
             await k8s.CreateNamespacedSecretAsync(passwordsSecret, crd.Namespace());
 
-            currentState.Add(crd.ID, new State.Entry(crd, hashCode));
+            currentState.Add(crd.Id, new State.Entry(crd, hashCode));
 
-            logger.LogInformation($"{nameof(CreatePasswordsSecret)}: {crd.ID}: created '{crd.Spec.PasswordsSecret}'");
+            logger.LogInformation($"{nameof(CreatePasswordsSecret)}: {crd.Id}: created '{crd.Spec.PasswordsSecret}'");
         }
         
-        private static async Task<(List<PasswordstatePassword> passwords, int hashCode)> FetchPasswordListFromPasswordstate(IKubernetes k8s, PasswordListCrd crd)
+        private async Task<(PasswordListResponse passwords, int hashCode)> FetchPasswordListFromPasswordstate(IKubernetes k8s, PasswordListCrd crd)
         {
             V1Secret apiKeySecret;
             try
@@ -181,58 +183,61 @@ namespace PasswordstateOperator
             }
             catch (HttpOperationException hoex) when (hoex.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                throw new ApplicationException($"{nameof(CreatePasswordsSecret)}: {crd.ID}: api key secret was '{crd.Spec.ApiKeySecret}' not found", hoex);
+                throw new ApplicationException($"{nameof(CreatePasswordsSecret)}: {crd.Id}: api key secret was '{crd.Spec.ApiKeySecret}' not found", hoex);
             }
 
             const string dataName = "apikey";
             if (!apiKeySecret.Data.TryGetValue(dataName, out var apiKeyBytes))
             {
-                throw new ApplicationException($"{nameof(CreatePasswordsSecret)}: {crd.ID}: data field '{dataName}' was not found in api key secret '{crd.Spec.ApiKeySecret}' ");
+                throw new ApplicationException($"{nameof(CreatePasswordsSecret)}: {crd.Id}: data field '{dataName}' was not found in api key secret '{crd.Spec.ApiKeySecret}' ");
             }
 
             var apiKey = Encoding.UTF8.GetString(apiKeyBytes);
 
-            var restClient = new RestClient(crd.Spec.ServerBaseUrl);
-            var restRequest = new RestRequest($"/api/passwords/{crd.Spec.PasswordListID}", Method.GET);
-            restRequest.AddHeader("APIKey", apiKey);
-            restRequest.AddQueryParameter("QueryAll", "true");
+            var result = await passwordstateSdk.GetPasswordList(crd.Spec.ServerBaseUrl, crd.Spec.PasswordListId, apiKey);
 
-            var result = await restClient.ExecuteAsync(restRequest);
-
-            if (!result.IsSuccessful)
-            {
-                throw new ApplicationException($"Failed to fetch password list with id {crd.Spec.PasswordListID} from Passwordstate: {result.ErrorMessage} {result.ErrorException}");
-            }
-
-            return (JsonSerializer.Deserialize<List<PasswordstatePassword>>(result.Content), result.Content.GetHashCode());
+            return (JsonSerializer.Deserialize<PasswordListResponse>(result.Content), result.Content.GetHashCode());
         }
 
-        private static V1Secret CreateFrom(List<PasswordstatePassword> data, string secretName)
+        private V1Secret CreateSecretFromResponse(PasswordListCrd crd, PasswordListResponse passwordListResponse)
         {
             var passwords = new Dictionary<string, string>();
 
-            foreach (var password in data)
+            foreach (var password in passwordListResponse)
             {
-                if (!string.IsNullOrWhiteSpace(password.Password))
+                const string TitleField = "Title";
+                password.TryGetValue(TitleField, out var title);
+
+                if (string.IsNullOrWhiteSpace(title))
                 {
-                    var key = Clean($"{password.Title}.{nameof(password.Password)}");
-                    passwords[key] = password.Password;
+                    password.TryGetValue("PasswordID", out var passwordId);
+                    logger.LogWarning($"{nameof(CreateSecretFromResponse)}: {crd.Id}: No {TitleField} found, skipping password ID {passwordId} in list ID {crd.Spec.PasswordListId}");
+                    continue;
                 }
-                
-                if (!string.IsNullOrWhiteSpace(password.UserName))
+
+                foreach (var (field, value) in password)
                 {
-                    var key = Clean($"{password.Title}.{nameof(password.UserName)}");
-                    passwords[key] = password.UserName;
+                    if (field == TitleField)
+                    {
+                        continue;
+                    }
+
+                    var stringValue = value.ToString();
+                    if (string.IsNullOrEmpty(stringValue))
+                    {
+                        continue;
+                    }
+                    
+                    var key = Clean($"{title}.{field}");                    
+                    passwords[key] = stringValue;
                 }
-                
-                //TODO: rest of fields, maybe reflection based?
             }
 
             return new V1Secret
             {
                 ApiVersion = "v1",
                 Kind = "Secret",
-                Metadata = new V1ObjectMeta(name: secretName),
+                Metadata = new V1ObjectMeta(name: crd.Spec.PasswordsSecret),
                 StringData = passwords
             };
         }
@@ -244,9 +249,9 @@ namespace PasswordstateOperator
 
         private async Task UpdatePasswordsSecretIfRequired(IKubernetes k8s, PasswordListCrd newCrd)
         {
-            if (!currentState.TryGet(newCrd.ID, out var state))
+            if (!currentState.TryGet(newCrd.Id, out var state))
             {
-                logger.LogWarning($"{nameof(OnUpdated)}: {newCrd.ID}: expected existing crd but none found, will create new");
+                logger.LogWarning($"{nameof(OnUpdated)}: {newCrd.Id}: expected existing crd but none found, will create new");
                 await CreatePasswordsSecret(k8s, newCrd);
                 return;
             }
@@ -258,7 +263,7 @@ namespace PasswordstateOperator
                 return;
             }
 
-            logger.LogInformation($"{nameof(OnUpdated)}: {newCrd.ID}: detected updated crd, will delete existing and create new");
+            logger.LogInformation($"{nameof(OnUpdated)}: {newCrd.Id}: detected updated crd, will delete existing and create new");
 
             await DeletePasswordsSecret(k8s, currentCrd);
             await CreatePasswordsSecret(k8s, newCrd);

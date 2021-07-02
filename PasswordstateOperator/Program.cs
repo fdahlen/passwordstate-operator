@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PasswordstateOperator.Kubernetes;
+using PasswordstateOperator.Passwordstate;
 
 namespace PasswordstateOperator
 {
@@ -13,6 +14,8 @@ namespace PasswordstateOperator
             //TODO: test run in cluster
             //TODO: crd field to trigger refresh
             //TODO: crd field for enabling polling 
+            //TODO: unit tests 
+            //TODO: refactor operation handler into smaller parts 
 
             CreateHostBuilder(args)
                 .Build()
@@ -31,6 +34,7 @@ namespace PasswordstateOperator
                     services.AddHostedService<Controller>();
                     services.AddTransient<OperationHandler>();
                     services.AddTransient<IKubernetesFactory, KubernetesFactory>();
+                    services.AddTransient<PasswordstateSdk>();
                 });
     }
 }
