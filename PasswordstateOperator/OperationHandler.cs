@@ -25,28 +25,28 @@ namespace PasswordstateOperator
             this.logger = logger;
         }
 
-        public async Task OnAdded(Kubernetes k8s, PasswordListCrd crd)
+        public async Task OnAdded(IKubernetes k8s, PasswordListCrd crd)
         {
             logger.LogInformation($"{nameof(OnAdded)}: {crd.ID}");
 
             await currentState.GuardedRun(crd.ID, async () => await CreatePasswordsSecret(k8s, crd));
         }
 
-        public Task OnBookmarked(Kubernetes k8s, PasswordListCrd crd)
+        public Task OnBookmarked(IKubernetes k8s, PasswordListCrd crd)
         {
              logger.LogInformation($"{nameof(OnBookmarked)}: {crd.ID}");
 
             return Task.CompletedTask;
         }
 
-        public async Task OnDeleted(Kubernetes k8s, PasswordListCrd crd)
+        public async Task OnDeleted(IKubernetes k8s, PasswordListCrd crd)
         {
             logger.LogInformation($"{nameof(OnDeleted)}: {crd.ID}");
 
             await currentState.GuardedRun(crd.ID, async () => await DeletePasswordsSecret(k8s, crd));
         }
         
-        private async Task DeletePasswordsSecret(Kubernetes k8s, PasswordListCrd crd)
+        private async Task DeletePasswordsSecret(IKubernetes k8s, PasswordListCrd crd)
         {
             try
             {
@@ -64,21 +64,21 @@ namespace PasswordstateOperator
             }
         }
 
-        public Task OnError(Kubernetes k8s, PasswordListCrd crd)
+        public Task OnError(IKubernetes k8s, PasswordListCrd crd)
         {
             logger.LogError($"{nameof(OnError)}: {crd.ID}");
 
             return Task.CompletedTask;
         }
 
-        public async Task OnUpdated(Kubernetes k8s, PasswordListCrd newCrd)
+        public async Task OnUpdated(IKubernetes k8s, PasswordListCrd newCrd)
         {
             logger.LogInformation($"{nameof(OnUpdated)}: {newCrd.ID}");
 
             await currentState.GuardedRun(newCrd.ID, async () => await UpdatePasswordsSecretIfRequired(k8s, newCrd));
         }
 
-        public async Task CheckCurrentState(Kubernetes k8s)
+        public async Task CheckCurrentState(IKubernetes k8s)
         {
             logger.LogInformation(nameof(CheckCurrentState));
 
@@ -88,7 +88,7 @@ namespace PasswordstateOperator
             }
         }
         
-        private async Task CheckCurrentStateForCrd(Kubernetes k8s, string id)
+        private async Task CheckCurrentStateForCrd(IKubernetes k8s, string id)
         {
             if (!currentState.TryGet(id, out var state))
             {
@@ -122,7 +122,7 @@ namespace PasswordstateOperator
             }
         }
 
-        private async Task SyncWithPasswordstate(Kubernetes k8s, PasswordListCrd crd, int currentHashCode)
+        private async Task SyncWithPasswordstate(IKubernetes k8s, PasswordListCrd crd, int currentHashCode)
         {
             var (newPasswords, newHashCode) = await FetchPasswordListFromPasswordstate(k8s, crd);
 
@@ -148,7 +148,7 @@ namespace PasswordstateOperator
             }
         }
 
-        private async Task CreatePasswordsSecret(Kubernetes k8s, PasswordListCrd crd)
+        private async Task CreatePasswordsSecret(IKubernetes k8s, PasswordListCrd crd)
         {
             List<PasswordstatePassword> passwords;
             int hashCode;
@@ -172,7 +172,7 @@ namespace PasswordstateOperator
             logger.LogInformation($"{nameof(CreatePasswordsSecret)}: {crd.ID}: created '{crd.Spec.PasswordsSecret}'");
         }
         
-        private static async Task<(List<PasswordstatePassword> passwords, int hashCode)> FetchPasswordListFromPasswordstate(Kubernetes k8s, PasswordListCrd crd)
+        private static async Task<(List<PasswordstatePassword> passwords, int hashCode)> FetchPasswordListFromPasswordstate(IKubernetes k8s, PasswordListCrd crd)
         {
             V1Secret apiKeySecret;
             try
@@ -242,7 +242,7 @@ namespace PasswordstateOperator
             return Regex.Replace(secretKey, "[^A-Za-z0-9_-.]", "").ToLower();
         }
 
-        private async Task UpdatePasswordsSecretIfRequired(Kubernetes k8s, PasswordListCrd newCrd)
+        private async Task UpdatePasswordsSecretIfRequired(IKubernetes k8s, PasswordListCrd newCrd)
         {
             if (!currentState.TryGet(newCrd.ID, out var state))
             {

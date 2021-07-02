@@ -1,6 +1,8 @@
+using k8s;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using PasswordstateOperator.Kubernetes;
 
 namespace PasswordstateOperator
 {
@@ -28,6 +30,7 @@ namespace PasswordstateOperator
                 {
                     services.AddHostedService<Controller>();
                     services.AddTransient<OperationHandler>();
+                    services.AddTransient<IKubernetesFactory, KubernetesFactory>();
                 });
     }
 }

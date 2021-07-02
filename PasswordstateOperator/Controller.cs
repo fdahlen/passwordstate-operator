@@ -1,6 +1,5 @@
 using System;
 using System.Net;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using k8s;
@@ -8,6 +7,7 @@ using k8s.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Rest;
+using PasswordstateOperator.Kubernetes;
 
 namespace PasswordstateOperator
 {
@@ -19,16 +19,16 @@ namespace PasswordstateOperator
     private Watcher<PasswordListCrd> watcher;
     private readonly string k8sNamespace;
 
-    private readonly Kubernetes kubernetes;
+    private readonly IKubernetes kubernetes;
     
     private readonly ILogger<Controller> logger;
 
-    public Controller(OperationHandler handler, ILogger<Controller> logger)
+    public Controller(IKubernetesFactory kubernetesFactory, OperationHandler handler, ILogger<Controller> logger)
     {
       this.handler = handler;
       this.logger = logger;
       k8sNamespace = "";
-      kubernetes = new Kubernetes(!KubernetesClientConfiguration.IsInCluster() ? KubernetesClientConfiguration.BuildConfigFromConfigFile() : KubernetesClientConfiguration.InClusterConfig(), Array.Empty<DelegatingHandler>());
+      kubernetes = kubernetesFactory.Create();
     }
 
     ~Controller() => DisposeWatcher();
