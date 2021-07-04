@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using k8s;
@@ -105,17 +105,17 @@ namespace PasswordstateOperator
 
             var crd = cacheEntry.Crd;
             
-            //TODO: should sync also detect changes in Spec?
-
             var passwordsSecret = await GetPasswordsSecret(k8s, crd);
             if (passwordsSecret == null)
             {
-                logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: does not exist, will create");
+                logger.LogInformation($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: does not exist, will create");
 
                 await CreatePasswordsSecret(k8s, crd, cacheLock);
             }
             else
             {
+                //TODO: fix bug with sync (only works for 1 crd at the moment)
+                
                 logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: exists");
 
                 if (DateTimeOffset.UtcNow > previousSyncTime.AddSeconds(PasswordstateSyncIntervalSeconds))
@@ -124,18 +124,20 @@ namespace PasswordstateOperator
 
                     logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: {PasswordstateSyncIntervalSeconds}s has passed, will sync with Passwordstate");
 
-                    await SyncWithPasswordstate(k8s, crd, cacheEntry.PasswordsHashCode);
+                    await SyncWithPasswordstate(k8s, cacheEntry);
                 }
             }
         }
 
-        private async Task SyncWithPasswordstate(IKubernetes k8s, PasswordListCrd crd, int currentHashCode)
+        private async Task SyncWithPasswordstate(IKubernetes k8s, CacheEntry cacheEntry)
         {
-            var (newPasswords, newHashCode) = await FetchPasswordListFromPasswordstate(k8s, crd);
+            var crd = cacheEntry.Crd;
 
-            if (newHashCode != currentHashCode)
+            var newPasswords = await FetchPasswordListFromPasswordstate(k8s, crd);
+
+            if (newPasswords.Json != cacheEntry.PasswordsJson)
             {
-                var newPasswordsSecret = CreateSecretFromResponse(crd, newPasswords);
+                var newPasswordsSecret = CreateSecret(crd, newPasswords.Passwords);
 
                 logger.LogInformation($"{nameof(SyncWithPasswordstate)}: {crd.Id}: detected changed password list in Passwordstate, will update password secret '{crd.Spec.PasswordsSecret}'");
 
@@ -158,28 +160,27 @@ namespace PasswordstateOperator
         private async Task CreatePasswordsSecret(IKubernetes k8s, PasswordListCrd crd, CacheLock cacheLock)
         {
             PasswordListResponse passwords;
-            int hashCode;
             
             try
             {
-                (passwords, hashCode) = await FetchPasswordListFromPasswordstate(k8s, crd);
+                passwords = await FetchPasswordListFromPasswordstate(k8s, crd);
             }
             catch (Exception e)
             {
                 logger.LogError(e, $"{nameof(CreatePasswordsSecret)}: {crd.Id}: Got exception, will not create secret '{crd.Spec.PasswordsSecret}'");
-                cacheLock.AddToCache(new CacheEntry(crd, 0));
+                cacheLock.AddToCache(new CacheEntry(crd, null));
                 return;
             }
 
-            var passwordsSecret = CreateSecretFromResponse(crd, passwords);
+            var passwordsSecret = CreateSecret(crd, passwords.Passwords);
             await k8s.CreateNamespacedSecretAsync(passwordsSecret, crd.Namespace());
 
-            cacheLock.AddToCache(new CacheEntry(crd, hashCode));
+            cacheLock.AddToCache(new CacheEntry(crd, passwords.Json));
 
             logger.LogInformation($"{nameof(CreatePasswordsSecret)}: {crd.Id}: created '{crd.Spec.PasswordsSecret}'");
         }
         
-        private async Task<(PasswordListResponse passwords, int hashCode)> FetchPasswordListFromPasswordstate(IKubernetes k8s, PasswordListCrd crd)
+        private async Task<PasswordListResponse> FetchPasswordListFromPasswordstate(IKubernetes k8s, PasswordListCrd crd)
         {
             V1Secret apiKeySecret;
             try
@@ -199,42 +200,39 @@ namespace PasswordstateOperator
 
             var apiKey = Encoding.UTF8.GetString(apiKeyBytes);
 
-            var result = await passwordstateSdk.GetPasswordList(crd.Spec.ServerBaseUrl, crd.Spec.PasswordListId, apiKey);
-
-            return (JsonSerializer.Deserialize<PasswordListResponse>(result.Content), result.Content.GetHashCode());
+            return await passwordstateSdk.GetPasswordList(crd.Spec.ServerBaseUrl, crd.Spec.PasswordListId, apiKey);
         }
 
-        private V1Secret CreateSecretFromResponse(PasswordListCrd crd, PasswordListResponse passwordListResponse)
+        private V1Secret CreateSecret(PasswordListCrd crd, List<Password> passwords)
         {
-            var passwords = new Dictionary<string, string>();
+            var flattenedPasswords = new Dictionary<string, string>();
 
-            foreach (var password in passwordListResponse)
+            foreach (var password in passwords)
             {
                 const string TitleField = "Title";
-                password.TryGetValue(TitleField, out var title);
+                var title = password.Fields.FirstOrDefault(field => field.Name == TitleField);
 
-                if (string.IsNullOrWhiteSpace(title))
+                if (title == null)
                 {
-                    password.TryGetValue("PasswordID", out var passwordId);
-                    logger.LogWarning($"{nameof(CreateSecretFromResponse)}: {crd.Id}: No {TitleField} found, skipping password ID {passwordId} in list ID {crd.Spec.PasswordListId}");
+                    var passwordId = password.Fields.FirstOrDefault(field => field.Name == "PasswordID");
+                    logger.LogWarning($"{nameof(CreateSecret)}: {crd.Id}: No {TitleField} found, skipping password ID {passwordId} in list ID {crd.Spec.PasswordListId}");
                     continue;
                 }
 
-                foreach (var (field, value) in password)
+                foreach (var field in password.Fields)
                 {
-                    if (field == TitleField)
+                    if (field.Name == TitleField)
                     {
                         continue;
                     }
 
-                    var stringValue = value.ToString();
-                    if (string.IsNullOrEmpty(stringValue))
+                    if (string.IsNullOrEmpty(field.Value))
                     {
                         continue;
                     }
                     
-                    var key = Clean($"{title}.{field}");                    
-                    passwords[key] = stringValue;
+                    var key = Clean($"{title.Name}.{field.Value}");                    
+                    flattenedPasswords[key] = field.Value;
                 }
             }
 
@@ -243,7 +241,7 @@ namespace PasswordstateOperator
                 ApiVersion = "v1",
                 Kind = "Secret",
                 Metadata = new V1ObjectMeta(name: crd.Spec.PasswordsSecret),
-                StringData = passwords
+                StringData = flattenedPasswords
             };
         }
         
