@@ -9,7 +9,7 @@ namespace PasswordstateOperator.Passwordstate
 {
     public class PasswordstateSdk
     {
-        public async Task<PasswordListResponse> GetPasswordList(string serverBaseUrl, int passwordListId, string apiKey)
+        public async Task<PasswordListResponse> GetPasswordList(string serverBaseUrl, string passwordListId, string apiKey)
         {
             var restClient = new RestClient(serverBaseUrl);
             var restRequest = new RestRequest($"/api/passwords/{passwordListId}", Method.GET);

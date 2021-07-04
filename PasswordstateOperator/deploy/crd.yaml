@@ -16,7 +16,7 @@ spec:
       schema:
         openAPIV3Schema:
           type: object
-          description: "A request for a password list from PasswordState"
+          description: "A request for a password list from Passwordstate"
           properties:
             spec:
               type: object
@@ -29,4 +29,6 @@ spec:
                   type: string
                 passwordssecret:
                   type: string
+                syncintervalseconds:
+                  type: integer
               required: ["serverbaseurl","passwordlistid", "apikeysecret", "passwordssecret"]

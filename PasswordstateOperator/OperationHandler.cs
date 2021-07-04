@@ -15,8 +15,6 @@ namespace PasswordstateOperator
 {
     public class OperationHandler
     {
-        private const int PasswordstateSyncIntervalSeconds = 60;
-        
         private readonly ILogger<OperationHandler> logger;
         private readonly CacheManager cacheManager = new();
         private readonly PasswordstateSdk passwordstateSdk;
@@ -115,10 +113,10 @@ namespace PasswordstateOperator
             {
                 logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: exists");
 
-                var shouldSync = DateTimeOffset.UtcNow > cacheEntry.SyncTime.AddSeconds(PasswordstateSyncIntervalSeconds);
+                var shouldSync = crd.Spec.SyncIntervalSeconds > 0 && DateTimeOffset.UtcNow > cacheEntry.SyncTime.AddSeconds(crd.Spec.SyncIntervalSeconds);
                 if (shouldSync)
                 {
-                    logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: {PasswordstateSyncIntervalSeconds}s has passed, will sync with Passwordstate");
+                    logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: {crd.Spec.SyncIntervalSeconds}s has passed, will sync with Passwordstate");
 
                     await SyncWithPasswordstate(k8s, cacheEntry.Crd, cacheEntry.PasswordsJson);
 
