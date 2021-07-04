@@ -22,7 +22,7 @@ namespace PasswordstateOperator.Cache
             guard.Release();
         }
         
-        public void AddToCache(CacheEntry cacheEntry)
+        public void AddOrUpdateInCache(CacheEntry cacheEntry)
         {
             cache[id] = cacheEntry;
         }

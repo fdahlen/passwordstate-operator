@@ -16,7 +16,6 @@ namespace PasswordstateOperator
     public class OperationHandler
     {
         private const int PasswordstateSyncIntervalSeconds = 60;
-        private DateTimeOffset previousSyncTime = DateTimeOffset.UtcNow;
         
         private readonly ILogger<OperationHandler> logger;
         private readonly CacheManager cacheManager = new();
@@ -114,28 +113,26 @@ namespace PasswordstateOperator
             }
             else
             {
-                //TODO: fix bug with sync (only works for 1 crd at the moment)
-                
                 logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: exists");
 
-                if (DateTimeOffset.UtcNow > previousSyncTime.AddSeconds(PasswordstateSyncIntervalSeconds))
+                var shouldSync = DateTimeOffset.UtcNow > cacheEntry.SyncTime.AddSeconds(PasswordstateSyncIntervalSeconds);
+                if (shouldSync)
                 {
-                    previousSyncTime = DateTimeOffset.UtcNow;
-
                     logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: {PasswordstateSyncIntervalSeconds}s has passed, will sync with Passwordstate");
 
-                    await SyncWithPasswordstate(k8s, cacheEntry);
+                    await SyncWithPasswordstate(k8s, cacheEntry.Crd, cacheEntry.PasswordsJson);
+
+                    var newCacheEntry = new CacheEntry(cacheEntry.Crd, cacheEntry.PasswordsJson, DateTimeOffset.UtcNow);
+                    cacheLock.AddOrUpdateInCache(newCacheEntry);
                 }
             }
         }
 
-        private async Task SyncWithPasswordstate(IKubernetes k8s, CacheEntry cacheEntry)
+        private async Task SyncWithPasswordstate(IKubernetes k8s, PasswordListCrd crd, string currentPasswordsJson)
         {
-            var crd = cacheEntry.Crd;
-
             var newPasswords = await FetchPasswordListFromPasswordstate(k8s, crd);
 
-            if (newPasswords.Json != cacheEntry.PasswordsJson)
+            if (newPasswords.Json != currentPasswordsJson)
             {
                 var newPasswordsSecret = CreateSecret(crd, newPasswords.Passwords);
 
@@ -168,14 +165,14 @@ namespace PasswordstateOperator
             catch (Exception e)
             {
                 logger.LogError(e, $"{nameof(CreatePasswordsSecret)}: {crd.Id}: Got exception, will not create secret '{crd.Spec.PasswordsSecret}'");
-                cacheLock.AddToCache(new CacheEntry(crd, null));
+                cacheLock.AddOrUpdateInCache(new CacheEntry(crd, null, DateTimeOffset.MinValue));
                 return;
             }
 
             var passwordsSecret = CreateSecret(crd, passwords.Passwords);
             await k8s.CreateNamespacedSecretAsync(passwordsSecret, crd.Namespace());
 
-            cacheLock.AddToCache(new CacheEntry(crd, passwords.Json));
+            cacheLock.AddOrUpdateInCache(new CacheEntry(crd, passwords.Json, DateTimeOffset.UtcNow));
 
             logger.LogInformation($"{nameof(CreatePasswordsSecret)}: {crd.Id}: created '{crd.Spec.PasswordsSecret}'");
         }

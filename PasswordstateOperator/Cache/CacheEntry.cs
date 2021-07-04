@@ -1,4 +1,4 @@
-using PasswordstateOperator.Passwordstate;
+using System;
 
 namespace PasswordstateOperator.Cache
 {
@@ -7,11 +7,14 @@ namespace PasswordstateOperator.Cache
         public PasswordListCrd Crd { get; }
 
         public string PasswordsJson { get; }
+        
+        public DateTimeOffset SyncTime { get; }
 
-        public CacheEntry(PasswordListCrd crd, string passwordsJson)
+        public CacheEntry(PasswordListCrd crd, string passwordsJson, DateTimeOffset syncTime)
         {
             Crd = crd;
             PasswordsJson = passwordsJson;
+            SyncTime = syncTime;
         }
     }
 }
