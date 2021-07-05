@@ -1,7 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 using RestSharp;
 
@@ -26,22 +23,8 @@ namespace PasswordstateOperator.Passwordstate
             return new PasswordListResponse
             {
                 Json = result.Content,
-                Passwords = ParsePasswords(result.Content)
+                Passwords = new PasswordsParser().Parse(result.Content)
             };
-        }
-        
-        private static List<Password> ParsePasswords(string json)
-        {
-            return JsonSerializer.Deserialize<List<Dictionary<string, dynamic>>>(json)
-                .Select(password => new Password
-                {
-                    Fields = password.Select(field => new Field
-                    {
-                        Name = field.Key,
-                        Value = field.Value.ToString()
-                    }).ToList()
-                })
-                .ToList();
         }
     }
 }
