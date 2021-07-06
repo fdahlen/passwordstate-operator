@@ -3,6 +3,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PasswordstateOperator.Kubernetes;
 using PasswordstateOperator.Passwordstate;
+using PasswordstateOperator.Rest;
+using RestSharp;
 
 namespace PasswordstateOperator
 {
@@ -32,6 +34,7 @@ namespace PasswordstateOperator
                     services.AddTransient<OperationHandler>();
                     services.AddTransient<IKubernetesFactory, KubernetesFactory>();
                     services.AddTransient<PasswordstateSdk>();
+                    services.AddTransient<IRestClientFactory, RestClientFactory>();
                 });
     }
 }
