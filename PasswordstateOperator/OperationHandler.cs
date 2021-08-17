@@ -4,11 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using k8s;
 using k8s.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Rest;
 using PasswordstateOperator.Cache;
+using PasswordstateOperator.Kubernetes;
 using PasswordstateOperator.Passwordstate;
 
 namespace PasswordstateOperator
@@ -18,46 +18,50 @@ namespace PasswordstateOperator
         private readonly ILogger<OperationHandler> logger;
         private readonly CacheManager cacheManager = new();
         private readonly PasswordstateSdk passwordstateSdk;
+        private readonly IKubernetesSdk kubernetesSdk;
 
-        public OperationHandler(ILogger<OperationHandler> logger, PasswordstateSdk passwordstateSdk)
+        public OperationHandler(ILogger<OperationHandler> logger, PasswordstateSdk passwordstateSdk, IKubernetesSdk kubernetesSdk)
         {
             this.logger = logger;
             this.passwordstateSdk = passwordstateSdk;
+            this.kubernetesSdk = kubernetesSdk;
         }
 
-        public async Task OnAdded(IKubernetes k8s, PasswordListCrd crd)
+        public async Task OnAdded(PasswordListCrd crd)
         {
             logger.LogInformation($"{nameof(OnAdded)}: {crd.Id}");
 
             using var cacheLock = await cacheManager.GetLock(crd.Id);
-            await CreatePasswordsSecret(k8s, crd, cacheLock);
+            await CreatePasswordsSecret(crd, cacheLock);
         }
 
-        public Task OnBookmarked(IKubernetes k8s, PasswordListCrd crd)
+        public Task OnBookmarked(PasswordListCrd crd)
         {
              logger.LogInformation($"{nameof(OnBookmarked)}: {crd.Id}");
 
             return Task.CompletedTask;
         }
 
-        public async Task OnDeleted(IKubernetes k8s, PasswordListCrd crd)
+        public async Task OnDeleted(PasswordListCrd crd)
         {
             logger.LogInformation($"{nameof(OnDeleted)}: {crd.Id}");
 
             using var cacheLock = await cacheManager.GetLock(crd.Id);
-            await DeletePasswordsSecret(k8s, crd, cacheLock);
+            await DeletePasswordsSecret(crd, cacheLock);
         }
-        
-        private async Task DeletePasswordsSecret(IKubernetes k8s, PasswordListCrd crd, CacheLock cacheLock)
+
+        private async Task DeletePasswordsSecret(PasswordListCrd crd, CacheLock cacheLock)
         {
-            try
+            var deleted = await kubernetesSdk.DeleteSecretAsync(crd.Spec.PasswordsSecret, crd.Namespace());
+            
+            //TODO: move logging like this to sdk?
+            if (deleted)
             {
-                await k8s.DeleteNamespacedSecretAsync(crd.Spec.PasswordsSecret, crd.Namespace());
                 logger.LogInformation($"{nameof(DeletePasswordsSecret)}: {crd.Id}: deleted '{crd.Spec.PasswordsSecret}'");
             }
-            catch (HttpOperationException hoex) when (hoex.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            else
             {
-                logger.LogWarning($"{nameof(DeletePasswordsSecret)}: {crd.Id}: could not delete because not found in k8s '{crd.Spec.PasswordsSecret}'");
+                logger.LogWarning($"{nameof(DeletePasswordsSecret)}: {crd.Id}: could not delete because not found in kubernetes '{crd.Spec.PasswordsSecret}'");
             }
 
             if (!cacheLock.TryRemoveFromCache())
@@ -66,33 +70,33 @@ namespace PasswordstateOperator
             }
         }
 
-        public Task OnError(IKubernetes k8s, PasswordListCrd crd)
+        public Task OnError(PasswordListCrd crd)
         {
             logger.LogError($"{nameof(OnError)}: {crd.Id}");
 
             return Task.CompletedTask;
         }
 
-        public async Task OnUpdated(IKubernetes k8s, PasswordListCrd newCrd)
+        public async Task OnUpdated(PasswordListCrd newCrd)
         {
             logger.LogInformation($"{nameof(OnUpdated)}: {newCrd.Id}");
 
             using var cacheLock = await cacheManager.GetLock(newCrd.Id);
-            await UpdatePasswordsSecretIfRequired(k8s, newCrd, cacheLock);
+            await UpdatePasswordsSecretIfRequired(newCrd, cacheLock);
         }
 
-        public async Task CheckCurrentState(IKubernetes k8s)
+        public async Task CheckCurrentState()
         {
             logger.LogInformation(nameof(CheckCurrentState));
 
             foreach (var id in cacheManager.GetCachedIds())
             {
                 using var cacheLock = await cacheManager.GetLock(id);
-                await CheckCurrentStateForCrd(k8s, id, cacheLock);
+                await CheckCurrentStateForCrd(id, cacheLock);
             }
         }
         
-        private async Task CheckCurrentStateForCrd(IKubernetes k8s, string id, CacheLock cacheLock)
+        private async Task CheckCurrentStateForCrd(string id, CacheLock cacheLock)
         {
             if (!cacheLock.TryGetFromCache(out var cacheEntry))
             {
@@ -102,12 +106,12 @@ namespace PasswordstateOperator
 
             var crd = cacheEntry.Crd;
             
-            var passwordsSecret = await GetPasswordsSecret(k8s, crd);
+            var passwordsSecret = await kubernetesSdk.GetSecretAsync(crd.Spec.PasswordsSecret, crd.Namespace());
             if (passwordsSecret == null)
             {
                 logger.LogInformation($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: does not exist, will create");
 
-                await CreatePasswordsSecret(k8s, crd, cacheLock);
+                await CreatePasswordsSecret(crd, cacheLock);
             }
             else
             {
@@ -118,7 +122,7 @@ namespace PasswordstateOperator
                 {
                     logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: {crd.Spec.SyncIntervalSeconds}s has passed, will sync with Passwordstate");
 
-                    await SyncWithPasswordstate(k8s, cacheEntry.Crd, cacheEntry.PasswordsJson);
+                    await SyncWithPasswordstate(cacheEntry.Crd, cacheEntry.PasswordsJson);
 
                     var newCacheEntry = new CacheEntry(cacheEntry.Crd, cacheEntry.PasswordsJson, DateTimeOffset.UtcNow);
                     cacheLock.AddOrUpdateInCache(newCacheEntry);
@@ -126,9 +130,9 @@ namespace PasswordstateOperator
             }
         }
 
-        private async Task SyncWithPasswordstate(IKubernetes k8s, PasswordListCrd crd, string currentPasswordsJson)
+        private async Task SyncWithPasswordstate(PasswordListCrd crd, string currentPasswordsJson)
         {
-            var newPasswords = await FetchPasswordListFromPasswordstate(k8s, crd);
+            var newPasswords = await FetchPasswordListFromPasswordstate(crd);
 
             if (newPasswords.Json != currentPasswordsJson)
             {
@@ -136,29 +140,17 @@ namespace PasswordstateOperator
 
                 logger.LogInformation($"{nameof(SyncWithPasswordstate)}: {crd.Id}: detected changed password list in Passwordstate, will update password secret '{crd.Spec.PasswordsSecret}'");
 
-                await k8s.ReplaceNamespacedSecretAsync(newPasswordsSecret, crd.Spec.PasswordsSecret, crd.Namespace());
+                await kubernetesSdk.ReplaceSecretAsync(newPasswordsSecret, crd.Spec.PasswordsSecret, crd.Namespace());
             }
         }
 
-        private static async Task<V1Secret> GetPasswordsSecret(IKubernetes k8s, PasswordListCrd crd)
-        {
-            try
-            {
-                return await k8s.ReadNamespacedSecretAsync(crd.Spec.PasswordsSecret, crd.Namespace());
-            }
-            catch (HttpOperationException hoex) when (hoex.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                return null;
-            }
-        }
-
-        private async Task CreatePasswordsSecret(IKubernetes k8s, PasswordListCrd crd, CacheLock cacheLock)
+        private async Task CreatePasswordsSecret(PasswordListCrd crd, CacheLock cacheLock)
         {
             PasswordListResponse passwords;
             
             try
             {
-                passwords = await FetchPasswordListFromPasswordstate(k8s, crd);
+                passwords = await FetchPasswordListFromPasswordstate(crd);
             }
             catch (Exception e)
             {
@@ -168,19 +160,19 @@ namespace PasswordstateOperator
             }
 
             var passwordsSecret = CreateSecret(crd, passwords.Passwords);
-            await k8s.CreateNamespacedSecretAsync(passwordsSecret, crd.Namespace());
+            await kubernetesSdk.CreateSecretAsync(passwordsSecret, crd.Namespace());
 
             cacheLock.AddOrUpdateInCache(new CacheEntry(crd, passwords.Json, DateTimeOffset.UtcNow));
 
             logger.LogInformation($"{nameof(CreatePasswordsSecret)}: {crd.Id}: created '{crd.Spec.PasswordsSecret}'");
         }
         
-        private async Task<PasswordListResponse> FetchPasswordListFromPasswordstate(IKubernetes k8s, PasswordListCrd crd)
+        private async Task<PasswordListResponse> FetchPasswordListFromPasswordstate(PasswordListCrd crd)
         {
             V1Secret apiKeySecret;
             try
             {
-                apiKeySecret = await k8s.ReadNamespacedSecretAsync(crd.Spec.ApiKeySecret, crd.Namespace());
+                apiKeySecret = await kubernetesSdk.GetSecretAsync(crd.Spec.ApiKeySecret, crd.Namespace());
             }
             catch (HttpOperationException hoex) when (hoex.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
@@ -245,12 +237,12 @@ namespace PasswordstateOperator
             return Regex.Replace(secretKey, "[^A-Za-z0-9_-.]", "").ToLower();
         }
 
-        private async Task UpdatePasswordsSecretIfRequired(IKubernetes k8s, PasswordListCrd newCrd, CacheLock cacheLock)
+        private async Task UpdatePasswordsSecretIfRequired(PasswordListCrd newCrd, CacheLock cacheLock)
         {
             if (!cacheLock.TryGetFromCache(out var cacheEntry))
             {
                 logger.LogWarning($"{nameof(OnUpdated)}: {newCrd.Id}: expected existing crd but none found, will create new");
-                await CreatePasswordsSecret(k8s, newCrd, cacheLock);
+                await CreatePasswordsSecret(newCrd, cacheLock);
                 return;
             }
             
@@ -263,8 +255,8 @@ namespace PasswordstateOperator
 
             logger.LogInformation($"{nameof(OnUpdated)}: {newCrd.Id}: detected updated crd, will delete existing and create new");
 
-            await DeletePasswordsSecret(k8s, currentCrd, cacheLock);
-            await CreatePasswordsSecret(k8s, newCrd, cacheLock);
+            await DeletePasswordsSecret(currentCrd, cacheLock);
+            await CreatePasswordsSecret(newCrd, cacheLock);
         }
     }
 }

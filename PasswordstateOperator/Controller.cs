@@ -1,12 +1,10 @@
 using System;
-using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using k8s;
 using k8s.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Rest;
 using PasswordstateOperator.Kubernetes;
 
 namespace PasswordstateOperator
@@ -19,43 +17,43 @@ namespace PasswordstateOperator
     private Watcher<PasswordListCrd> watcher;
     private readonly string k8sNamespace;
 
-    private readonly IKubernetes kubernetes;
+    private readonly IKubernetesSdk kubernetesSdk;
     
     private readonly ILogger<Controller> logger;
 
-    public Controller(IKubernetesFactory kubernetesFactory, OperationHandler handler, ILogger<Controller> logger)
+    public Controller(IKubernetesSdk kubernetesSdk, OperationHandler handler, ILogger<Controller> logger)
     {
       this.handler = handler;
       this.logger = logger;
       k8sNamespace = "";
-      kubernetes = kubernetesFactory.Create();
+      this.kubernetesSdk = kubernetesSdk;
     }
 
     ~Controller() => DisposeWatcher();
 
     private async Task<bool> IsCRDAvailable()
     {
-      try
-      {
-        await kubernetes.ListNamespacedCustomObjectWithHttpMessagesAsync(
-          PasswordListCrd.ApiGroup, 
-          PasswordListCrd.ApiVersion, 
-          k8sNamespace, 
-          PasswordListCrd.Plural);
-      }
-      catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound)
-      {
-        logger.LogWarning($"{nameof(Controller)}: {nameof(IsCRDAvailable)}: No CustomResourceDefinition found for '" + PasswordListCrd.Plural + "', group '" + PasswordListCrd.ApiGroup + "' and version '" + PasswordListCrd.ApiVersion + "' on namespace '" + k8sNamespace + "'");
-        return false;
-      }
+      var available = await kubernetesSdk.CustomResourcesExistAsync(
+        PasswordListCrd.ApiGroup,
+        PasswordListCrd.ApiVersion,
+        k8sNamespace,
+        PasswordListCrd.Plural);
       
-      return true;
+      if (!available)
+      {
+        //TODO: keep here? cleanup w string interpolation?
+        logger.LogWarning($"{nameof(Controller)}: {nameof(IsCRDAvailable)}: No CustomResourceDefinition found for '" + PasswordListCrd.Plural + "', group '" +
+                          PasswordListCrd.ApiGroup + "' and version '" + PasswordListCrd.ApiVersion + "' on namespace '" + k8sNamespace + "'");
+      }
+
+      return available;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
       logger.LogInformation($"=== {nameof(Controller)} STARTING ===");
 
+      //TODO: is this needed? can't we just watch without any CRDs existing to start with?
       try
       {
         while (!await IsCRDAvailable() && !stoppingToken.IsCancellationRequested)
@@ -76,7 +74,7 @@ namespace PasswordstateOperator
       }
       finally
       {
-        logger.LogWarning($"=== {nameof(Program)} TERMINATING ===");
+        logger.LogInformation($"=== {nameof(Program)} TERMINATING ===");
       }
     }
 
@@ -84,13 +82,11 @@ namespace PasswordstateOperator
     {
       DisposeWatcher();
 
-      watcher = kubernetes.ListNamespacedCustomObjectWithHttpMessagesAsync(
+      watcher = kubernetesSdk.WatchCustomResources(
           PasswordListCrd.ApiGroup,
           PasswordListCrd.ApiVersion,
           k8sNamespace,
           PasswordListCrd.Plural,
-          watch: true)
-        .Watch(
           new Action<WatchEventType, PasswordListCrd>(OnChange),
           OnError,
           OnClose);
@@ -103,7 +99,7 @@ namespace PasswordstateOperator
       while (!stoppingToken.IsCancellationRequested)
       {
         await Task.Delay(ReconciliationCheckIntervalSeconds * 1000);
-        await handler.CheckCurrentState(kubernetes);
+        await handler.CheckCurrentState();
       }
     }
 
@@ -119,26 +115,26 @@ namespace PasswordstateOperator
 
     private async void OnChange(WatchEventType type, PasswordListCrd crd)
     {
-      logger.LogWarning($"{nameof(Controller)}: {nameof(OnChange)}: {nameof(PasswordListCrd)} '{crd.Id}' event {(object) type} in namespace {crd.Namespace()}");
+      logger.LogInformation($"{nameof(Controller)}: {nameof(OnChange)}: {nameof(PasswordListCrd)} '{crd.Id}' event {(object) type} in namespace {crd.Namespace()}");
       
       try
       {
         switch (type)
         {
           case WatchEventType.Added:
-            await handler.OnAdded(kubernetes, crd);
+            await handler.OnAdded(crd);
             break;
           case WatchEventType.Modified:
-            await handler.OnUpdated(kubernetes, crd);
+            await handler.OnUpdated(crd);
             break;
           case WatchEventType.Deleted:
-            await handler.OnDeleted(kubernetes, crd);
+            await handler.OnDeleted(crd);
             break;
           case WatchEventType.Error:
-            await handler.OnError(kubernetes, crd);
+            await handler.OnError(crd);
             break;
           case WatchEventType.Bookmark:
-            await handler.OnBookmarked(kubernetes, crd);
+            await handler.OnBookmarked(crd);
             break;
           default:
             throw new ArgumentOutOfRangeException(nameof(type), type, null);
