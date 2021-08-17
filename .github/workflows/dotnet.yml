@@ -1,4 +1,4 @@
-name: donet build
+name: dotnet build
 
 on:
   push:
