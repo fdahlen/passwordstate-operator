@@ -218,7 +218,7 @@ namespace PasswordstateOperator
                         continue;
                     }
                     
-                    var key = Clean($"{title.Name}.{field.Value}");                    
+                    var key = Clean($"{title.Value}.{field.Name}");                    
                     flattenedPasswords[key] = field.Value;
                 }
             }
