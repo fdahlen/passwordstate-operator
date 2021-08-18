@@ -234,7 +234,7 @@ namespace PasswordstateOperator
         
         private static string Clean(string secretKey)
         {
-            return Regex.Replace(secretKey, "[^A-Za-z0-9_-.]", "").ToLower();
+            return Regex.Replace(secretKey, "[^A-Za-z0-9_.-]", "").ToLower();
         }
 
         private async Task UpdatePasswordsSecretIfRequired(PasswordListCrd newCrd, CacheLock cacheLock)
