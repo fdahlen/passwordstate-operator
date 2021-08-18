@@ -21,7 +21,7 @@ spec:
           imagePullPolicy: Always
           ports:
             - name: http
-              containerPort: 5000
+              containerPort: 80
               protocol: TCP
           resources:
             requests:
@@ -33,3 +33,5 @@ spec:
           env:
             - name: ASPNETCORE_ENVIRONMENT
               value: Development
+            - name: LISTEN_URL
+              value: %%url%%
