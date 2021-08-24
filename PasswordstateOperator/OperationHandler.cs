@@ -111,26 +111,31 @@ namespace PasswordstateOperator
                 {
                     logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: {crd.Spec.SyncIntervalSeconds}s has passed, will sync with Passwordstate");
 
-                    await SyncWithPasswordstate(cacheEntry.Crd, cacheEntry.PasswordsJson);
+                    var passwordsJson = await SyncWithPasswordstate(cacheEntry.Crd, cacheEntry.PasswordsJson);
 
-                    var newCacheEntry = new CacheEntry(cacheEntry.Crd, cacheEntry.PasswordsJson, DateTimeOffset.UtcNow);
+                    var newCacheEntry = new CacheEntry(cacheEntry.Crd, passwordsJson, DateTimeOffset.UtcNow);
                     cacheLock.AddOrUpdateInCache(newCacheEntry);
                 }
             }
         }
 
-        private async Task SyncWithPasswordstate(PasswordListCrd crd, string currentPasswordsJson)
+        private async Task<string> SyncWithPasswordstate(PasswordListCrd crd, string currentPasswordsJson)
         {
             var newPasswords = await FetchPasswordListFromPasswordstate(crd);
 
-            if (newPasswords.Json != currentPasswordsJson)
+            if (newPasswords.Json == currentPasswordsJson)
             {
-                var newPasswordsSecret = BuildSecret(crd, newPasswords.Passwords);
-
-                logger.LogInformation($"{nameof(SyncWithPasswordstate)}: {crd.Id}: detected changed password list in Passwordstate, will update password secret '{crd.Spec.PasswordsSecret}'");
-
-                await kubernetesSdk.ReplaceSecretAsync(newPasswordsSecret, crd.Spec.PasswordsSecret, crd.Namespace());
+                logger.LogDebug($"{nameof(SyncWithPasswordstate)}: {crd.Id}: no changes in Passwordstate, will skip");
+                return currentPasswordsJson;
             }
+
+            var newPasswordsSecret = BuildSecret(crd, newPasswords.Passwords);
+
+            logger.LogInformation($"{nameof(SyncWithPasswordstate)}: {crd.Id}: detected changed password list in Passwordstate, will update password secret '{crd.Spec.PasswordsSecret}'");
+
+            await kubernetesSdk.ReplaceSecretAsync(newPasswordsSecret, crd.Spec.PasswordsSecret, crd.Namespace());
+
+            return newPasswords.Json;
         }
 
         private async Task CreatePasswordsSecret(PasswordListCrd crd, CacheLock cacheLock)
@@ -172,13 +177,13 @@ namespace PasswordstateOperator
             var apiKeySecret = await kubernetesSdk.GetSecretAsync(crd.Spec.ApiKeySecret, crd.Namespace());
             if (apiKeySecret == null)
             {
-                throw new ApplicationException($"{nameof(FetchPasswordListFromPasswordstate)}: {crd.Id}: api key secret '{crd.Spec.ApiKeySecret}' was not found");
+                throw new ApplicationException($"{nameof(GetApiKey)}: {crd.Id}: api key secret '{crd.Spec.ApiKeySecret}' was not found");
             }
 
             const string dataName = "apikey";
             if (!apiKeySecret.Data.TryGetValue(dataName, out var apiKeyBytes))
             {
-                throw new ApplicationException($"{nameof(FetchPasswordListFromPasswordstate)}: {crd.Id}: data field '{dataName}' was not found in api key secret '{crd.Spec.ApiKeySecret}'");
+                throw new ApplicationException($"{nameof(GetApiKey)}: {crd.Id}: data field '{dataName}' was not found in api key secret '{crd.Spec.ApiKeySecret}'");
             }
 
             return Encoding.UTF8.GetString(apiKeyBytes);
