@@ -31,27 +31,18 @@ namespace PasswordstateOperator
 
     ~Controller() => DisposeWatcher();
 
-    private async Task<bool> IsCRDAvailable()
+    private Task<bool> IsCRDAvailable()
     {
-      var available = await kubernetesSdk.CustomResourcesExistAsync(
+      return kubernetesSdk.CustomResourcesExistAsync(
         PasswordListCrd.ApiGroup,
         PasswordListCrd.ApiVersion,
         k8sNamespace,
         PasswordListCrd.Plural);
-      
-      if (!available)
-      {
-        //TODO: keep here? cleanup w string interpolation?
-        logger.LogWarning($"{nameof(Controller)}: {nameof(IsCRDAvailable)}: No CustomResourceDefinition found for '" + PasswordListCrd.Plural + "', group '" +
-                          PasswordListCrd.ApiGroup + "' and version '" + PasswordListCrd.ApiVersion + "' on namespace '" + k8sNamespace + "'");
-      }
-
-      return available;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-      logger.LogInformation($"=== {nameof(Controller)} STARTING ===");
+      logger.LogInformation($"{nameof(ExecuteAsync)}: Starting");
 
       //TODO: is this needed? can't we just watch without any CRDs existing to start with?
       try
@@ -63,18 +54,18 @@ namespace PasswordstateOperator
 
         StartWatcher();
 
-        logger.LogInformation($"=== {nameof(Controller)} STARTED ===");
-
+        logger.LogInformation($"{nameof(ExecuteAsync)}: Started");
+  
         await ReconciliationLoop(stoppingToken);
       }
       catch (Exception ex)
       {
-        logger.LogCritical(ex, ex.Message);
+        logger.LogCritical(ex, $"{nameof(ExecuteAsync)}: Failure");
         throw;
       }
       finally
       {
-        logger.LogInformation($"=== {nameof(Program)} TERMINATING ===");
+        logger.LogInformation($"{nameof(ExecuteAsync)}: Terminating");
       }
     }
 
@@ -94,7 +85,7 @@ namespace PasswordstateOperator
 
     private async Task ReconciliationLoop(CancellationToken stoppingToken)
     {
-      logger.LogInformation($"{nameof(Controller)}: {nameof(ReconciliationLoop)}: Reconciliation loop will run every {ReconciliationCheckIntervalSeconds} seconds");
+      logger.LogInformation($"{nameof(ReconciliationLoop)}: Reconciliation loop will run every {ReconciliationCheckIntervalSeconds} seconds");
       
       while (!stoppingToken.IsCancellationRequested)
       {
@@ -115,7 +106,7 @@ namespace PasswordstateOperator
 
     private async void OnChange(WatchEventType type, PasswordListCrd crd)
     {
-      logger.LogInformation($"{nameof(Controller)}: {nameof(OnChange)}: {nameof(PasswordListCrd)} '{crd.Id}' event {(object) type} in namespace {crd.Namespace()}");
+      logger.LogInformation($"{nameof(OnChange)}: {nameof(PasswordListCrd)} '{crd.Id}' event {(object) type} in namespace {crd.Namespace()}");
       
       try
       {
@@ -142,7 +133,7 @@ namespace PasswordstateOperator
       }
       catch (Exception ex)
       {
-        logger.LogError(ex, $"{nameof(Controller)}: {nameof(OnChange)}: Exception for {nameof(PasswordListCrd)} '{crd.Name()}' event {(object) type} in namespace {crd.Namespace()}");
+        logger.LogError(ex, $"{nameof(OnChange)}: Exception for {nameof(PasswordListCrd)} '{crd.Name()}' event {(object) type} in namespace {crd.Namespace()}");
       }
     }
 
@@ -152,18 +143,18 @@ namespace PasswordstateOperator
       {
         if (canceledException.InnerException is TimeoutException)
         {
-          logger.LogError(exception, $"{nameof(Controller)}: {nameof(OnError)}: TimeoutException");
+          logger.LogError(exception, $"{nameof(OnError)}: TimeoutException");
           DisposeWatcher();
           return;
         }
       }
 
-      logger.LogCritical(exception, $"{nameof(Controller)}: {nameof(OnError)}: Exception");
+      logger.LogCritical(exception, $"{nameof(OnError)}: Exception");
     }
 
     private void OnClose()
     {
-      logger.LogCritical($"{nameof(Controller)}: {nameof(OnClose)}: Connection closed, restarting watcher");
+      logger.LogCritical($"{nameof(OnClose)}: Connection closed, restarting watcher");
       
       StartWatcher();
     }

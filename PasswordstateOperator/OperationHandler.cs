@@ -6,7 +6,6 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using k8s.Models;
 using Microsoft.Extensions.Logging;
-using Microsoft.Rest;
 using PasswordstateOperator.Cache;
 using PasswordstateOperator.Kubernetes;
 using PasswordstateOperator.Passwordstate;
@@ -52,17 +51,7 @@ namespace PasswordstateOperator
 
         private async Task DeletePasswordsSecret(PasswordListCrd crd, CacheLock cacheLock)
         {
-            var deleted = await kubernetesSdk.DeleteSecretAsync(crd.Spec.PasswordsSecret, crd.Namespace());
-            
-            //TODO: move logging like this to sdk?
-            if (deleted)
-            {
-                logger.LogInformation($"{nameof(DeletePasswordsSecret)}: {crd.Id}: deleted '{crd.Spec.PasswordsSecret}'");
-            }
-            else
-            {
-                logger.LogWarning($"{nameof(DeletePasswordsSecret)}: {crd.Id}: could not delete because not found in kubernetes '{crd.Spec.PasswordsSecret}'");
-            }
+            await kubernetesSdk.DeleteSecretAsync(crd.Spec.PasswordsSecret, crd.Namespace());
 
             if (!cacheLock.TryRemoveFromCache())
             {
@@ -87,7 +76,7 @@ namespace PasswordstateOperator
 
         public async Task CheckCurrentState()
         {
-            logger.LogInformation(nameof(CheckCurrentState));
+            logger.LogDebug(nameof(CheckCurrentState));
 
             foreach (var id in cacheManager.GetCachedIds())
             {
@@ -136,7 +125,7 @@ namespace PasswordstateOperator
 
             if (newPasswords.Json != currentPasswordsJson)
             {
-                var newPasswordsSecret = CreateSecret(crd, newPasswords.Passwords);
+                var newPasswordsSecret = BuildSecret(crd, newPasswords.Passwords);
 
                 logger.LogInformation($"{nameof(SyncWithPasswordstate)}: {crd.Id}: detected changed password list in Passwordstate, will update password secret '{crd.Spec.PasswordsSecret}'");
 
@@ -159,38 +148,39 @@ namespace PasswordstateOperator
                 return;
             }
 
-            var passwordsSecret = CreateSecret(crd, passwords.Passwords);
+            var passwordsSecret = BuildSecret(crd, passwords.Passwords);
             await kubernetesSdk.CreateSecretAsync(passwordsSecret, crd.Namespace());
 
             cacheLock.AddOrUpdateInCache(new CacheEntry(crd, passwords.Json, DateTimeOffset.UtcNow));
 
-            logger.LogInformation($"{nameof(CreatePasswordsSecret)}: {crd.Id}: created '{crd.Spec.PasswordsSecret}'");
+            logger.LogInformation($"{nameof(CreatePasswordsSecret)}: {crd.Id}: successfully created '{crd.Spec.PasswordsSecret}'");
         }
         
         private async Task<PasswordListResponse> FetchPasswordListFromPasswordstate(PasswordListCrd crd)
         {
-            V1Secret apiKeySecret;
-            try
+            var apiKey = await GetApiKey(crd);
+
+            return await passwordstateSdk.GetPasswordList(crd.Spec.ServerBaseUrl, crd.Spec.PasswordListId, apiKey);
+        }
+        
+        private async Task<string> GetApiKey(PasswordListCrd crd)
+        {
+            var apiKeySecret = await kubernetesSdk.GetSecretAsync(crd.Spec.ApiKeySecret, crd.Namespace());
+            if (apiKeySecret == null)
             {
-                apiKeySecret = await kubernetesSdk.GetSecretAsync(crd.Spec.ApiKeySecret, crd.Namespace());
-            }
-            catch (HttpOperationException hoex) when (hoex.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                throw new ApplicationException($"{nameof(CreatePasswordsSecret)}: {crd.Id}: api key secret was '{crd.Spec.ApiKeySecret}' not found", hoex);
+                throw new ApplicationException($"{nameof(FetchPasswordListFromPasswordstate)}: {crd.Id}: api key secret '{crd.Spec.ApiKeySecret}' was not found");
             }
 
             const string dataName = "apikey";
             if (!apiKeySecret.Data.TryGetValue(dataName, out var apiKeyBytes))
             {
-                throw new ApplicationException($"{nameof(CreatePasswordsSecret)}: {crd.Id}: data field '{dataName}' was not found in api key secret '{crd.Spec.ApiKeySecret}' ");
+                throw new ApplicationException($"{nameof(FetchPasswordListFromPasswordstate)}: {crd.Id}: data field '{dataName}' was not found in api key secret '{crd.Spec.ApiKeySecret}'");
             }
 
-            var apiKey = Encoding.UTF8.GetString(apiKeyBytes);
-
-            return await passwordstateSdk.GetPasswordList(crd.Spec.ServerBaseUrl, crd.Spec.PasswordListId, apiKey);
+            return Encoding.UTF8.GetString(apiKeyBytes);
         }
 
-        private V1Secret CreateSecret(PasswordListCrd crd, List<Password> passwords)
+        private V1Secret BuildSecret(PasswordListCrd crd, List<Password> passwords)
         {
             var flattenedPasswords = new Dictionary<string, string>();
 
@@ -202,7 +192,7 @@ namespace PasswordstateOperator
                 if (title == null)
                 {
                     var passwordId = password.Fields.FirstOrDefault(field => field.Name == "PasswordID");
-                    logger.LogWarning($"{nameof(CreateSecret)}: {crd.Id}: No {TitleField} found, skipping password ID {passwordId} in list ID {crd.Spec.PasswordListId}");
+                    logger.LogWarning($"{nameof(BuildSecret)}: {crd.Id}: No {TitleField} found, skipping password ID {passwordId} in list ID {crd.Spec.PasswordListId}");
                     continue;
                 }
 
@@ -241,7 +231,7 @@ namespace PasswordstateOperator
         {
             if (!cacheLock.TryGetFromCache(out var cacheEntry))
             {
-                logger.LogWarning($"{nameof(OnUpdated)}: {newCrd.Id}: expected existing crd but none found, will create new");
+                logger.LogWarning($"{nameof(UpdatePasswordsSecretIfRequired)}: {newCrd.Id}: expected existing crd but none found, will create new");
                 await CreatePasswordsSecret(newCrd, cacheLock);
                 return;
             }
@@ -250,10 +240,11 @@ namespace PasswordstateOperator
             
             if (currentCrd.Spec.ToString() == newCrd.Spec.ToString())
             {
+                logger.LogDebug($"{nameof(UpdatePasswordsSecretIfRequired)}: {newCrd.Id}: identical Spec, will not update");
                 return;
             }
 
-            logger.LogInformation($"{nameof(OnUpdated)}: {newCrd.Id}: detected updated crd, will delete existing and create new");
+            logger.LogInformation($"{nameof(UpdatePasswordsSecretIfRequired)}: {newCrd.Id}: detected updated crd, will delete existing and create new");
 
             await DeletePasswordsSecret(currentCrd, cacheLock);
             await CreatePasswordsSecret(newCrd, cacheLock);

@@ -22,12 +22,12 @@ namespace PasswordstateOperator.Kubernetes
             string @namespace,
             string plural);
         
-        Task<V1Secret> CreateSecretAsync(V1Secret secret, string @namespace);
+        Task CreateSecretAsync(V1Secret secret, string @namespace);
 
         Task<V1Secret> GetSecretAsync(string name, string @namespace);
         
-        Task<V1Secret> ReplaceSecretAsync(V1Secret newSecret, string name, string @namespace);
+        Task ReplaceSecretAsync(V1Secret newSecret, string name, string @namespace);
         
-        Task<bool> DeleteSecretAsync(string name, string @namespace);
+        Task DeleteSecretAsync(string name, string @namespace);
     }
 }
