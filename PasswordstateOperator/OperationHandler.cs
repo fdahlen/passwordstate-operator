@@ -89,7 +89,7 @@ namespace PasswordstateOperator
         {
             if (!cacheLock.TryGetFromCache(out var cacheEntry))
             {
-                logger.LogWarning($"{nameof(CheckCurrentStateForCrd)}: {id}: expected existing crd but none found, will skip");
+                logger.LogWarning($"{nameof(CheckCurrentStateForCrd)}: {id}: expected existing crd but none found in cache, will skip");
                 return;
             }
 
@@ -135,8 +135,11 @@ namespace PasswordstateOperator
 
         private async Task CreatePasswordsSecret(PasswordListCrd crd, CacheLock cacheLock)
         {
+
+            // Make sure we have CRD in cache, so reconciliation can fix things
+            cacheLock.AddOrUpdateInCache(new CacheEntry(crd, null, DateTimeOffset.MinValue));
+
             PasswordListResponse passwords;
-            
             try
             {
                 passwords = await FetchPasswordListFromPasswordstate(crd);
@@ -144,11 +147,12 @@ namespace PasswordstateOperator
             catch (Exception e)
             {
                 logger.LogError(e, $"{nameof(CreatePasswordsSecret)}: {crd.Id}: Got exception, will not create secret '{crd.Spec.PasswordsSecret}'");
-                cacheLock.AddOrUpdateInCache(new CacheEntry(crd, null, DateTimeOffset.MinValue));
                 return;
             }
 
             var passwordsSecret = BuildSecret(crd, passwords.Passwords);
+            
+            //TODO: crashed because of Http status code Conflict when already in k8s
             await kubernetesSdk.CreateSecretAsync(passwordsSecret, crd.Namespace());
 
             cacheLock.AddOrUpdateInCache(new CacheEntry(crd, passwords.Json, DateTimeOffset.UtcNow));
