@@ -13,7 +13,6 @@ namespace PasswordstateOperator
         {
             //TODO: test run in cluster
             //TODO: unit tests 
-            //TODO: refactor operation handler into smaller parts 
 
             CreateHostBuilder(args)
                 .Build()
@@ -25,7 +24,7 @@ namespace PasswordstateOperator
                 .ConfigureLogging(builder =>
                 {
                     builder.ClearProviders();
-                    builder.AddConsole();
+                    builder.AddConsole().AddFilter(_ => true);
                 })
                 .ConfigureServices((hostBuilderContext, services) =>
                 {
