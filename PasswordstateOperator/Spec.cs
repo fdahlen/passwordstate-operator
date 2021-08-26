@@ -1,3 +1,5 @@
+using System;
+
 namespace PasswordstateOperator
 {
     public class Spec
@@ -11,6 +13,16 @@ namespace PasswordstateOperator
         public override string ToString()
         {
             return $"{ServerBaseUrl}:{PasswordListId}:{ApiKeySecret}:{PasswordsSecret}:{SyncIntervalSeconds}"; 
+        }
+        
+        public override bool Equals(object obj)
+        {
+            return ToString().Equals(obj?.ToString());
+        }
+        
+        public override int GetHashCode()
+        {
+            return ToString().GetHashCode();
         }
     }
 }

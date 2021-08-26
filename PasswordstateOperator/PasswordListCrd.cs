@@ -9,19 +9,11 @@ namespace PasswordstateOperator
 
         public const string ApiVersion = "v1";
 
-        public const string Singular = "passwordlist";
-        
         public const string Plural = "passwordlists";
-
-        public const string Kind = "PasswordList";
 
         public string Id => $"{this.Namespace()}/{this.Name()}";
 
         public V1ObjectMeta Metadata { get; set; }
-
-        public string StatusAnnotationName => string.Format(ApiGroup + "/" + Singular + "-status");
-
-        public string Status => !Metadata.Annotations.ContainsKey(StatusAnnotationName) ? null : Metadata.Annotations[StatusAnnotationName];
 
         public Spec Spec { get; set; }
 

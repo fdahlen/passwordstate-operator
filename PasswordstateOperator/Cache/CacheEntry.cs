@@ -6,15 +6,12 @@ namespace PasswordstateOperator.Cache
     {
         public PasswordListCrd Crd { get; }
 
-        public string PasswordsJson { get; }
-        
-        public DateTimeOffset SyncTime { get; }
+        public DateTimeOffset PreviousSyncTime { get; }
 
-        public CacheEntry(PasswordListCrd crd, string passwordsJson, DateTimeOffset syncTime)
+        public CacheEntry(PasswordListCrd crd, DateTimeOffset previousSyncTime)
         {
             Crd = crd;
-            PasswordsJson = passwordsJson;
-            SyncTime = syncTime;
+            PreviousSyncTime = previousSyncTime;
         }
     }
 }
