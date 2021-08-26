@@ -31,27 +31,12 @@ namespace PasswordstateOperator
 
     ~Controller() => DisposeWatcher();
 
-    private Task<bool> IsCRDAvailable()
-    {
-      return kubernetesSdk.CustomResourcesExistAsync(
-        PasswordListCrd.ApiGroup,
-        PasswordListCrd.ApiVersion,
-        k8sNamespace,
-        PasswordListCrd.Plural);
-    }
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
       logger.LogInformation($"{nameof(ExecuteAsync)}: Starting");
 
-      //TODO: is this needed? can't we just watch without any CRDs existing to start with?
       try
       {
-        while (!await IsCRDAvailable() && !stoppingToken.IsCancellationRequested)
-        {
-          await Task.Delay(ReconciliationCheckIntervalSeconds * 1000);
-        }
-
         StartWatcher();
 
         logger.LogInformation($"{nameof(ExecuteAsync)}: Started");

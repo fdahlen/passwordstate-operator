@@ -45,32 +45,6 @@ namespace PasswordstateOperator.Kubernetes
             return watcher;
         }
 
-        public async Task<bool> CustomResourcesExistAsync(
-            string group,
-            string version,
-            string @namespace,
-            string plural)
-        {
-            try
-            {
-                await kubernetes.ListNamespacedCustomObjectWithHttpMessagesAsync(
-                    @group,
-                    version,
-                    @namespace,
-                    plural);
-
-                logger.LogDebug($"{nameof(CustomResourcesExistAsync)}: There is at least one {plural} resource in namespace {@namespace}");
-                
-                return true;
-            }
-            catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound)
-            {
-                logger.LogDebug($"{nameof(CustomResourcesExistAsync)}: There are no {plural} resources in namespace {@namespace}");
-                
-                return false;
-            }
-        }
-        
         public async Task CreateSecretAsync(V1Secret secret, string @namespace)
         {
             try

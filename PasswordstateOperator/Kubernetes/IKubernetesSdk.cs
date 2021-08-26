@@ -15,13 +15,7 @@ namespace PasswordstateOperator.Kubernetes
             Action<WatchEventType, TCrd> onChange,
             Action<Exception> onError,
             Action onClose);
-        
-        Task<bool> CustomResourcesExistAsync(
-            string group,
-            string version,
-            string @namespace,
-            string plural);
-        
+
         Task CreateSecretAsync(V1Secret secret, string @namespace);
 
         Task<V1Secret> GetSecretAsync(string name, string @namespace);
