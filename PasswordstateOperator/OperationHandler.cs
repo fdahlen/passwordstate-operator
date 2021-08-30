@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using k8s.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using PasswordstateOperator.Cache;
 using PasswordstateOperator.Kubernetes;
 using PasswordstateOperator.Passwordstate;
@@ -21,12 +22,18 @@ namespace PasswordstateOperator
         private readonly CacheManager cacheManager = new();
         private readonly PasswordstateSdk passwordstateSdk;
         private readonly IKubernetesSdk kubernetesSdk;
+        private readonly Settings settings;
 
-        public OperationHandler(ILogger<OperationHandler> logger, PasswordstateSdk passwordstateSdk, IKubernetesSdk kubernetesSdk)
+        public OperationHandler(
+            ILogger<OperationHandler> logger, 
+            PasswordstateSdk passwordstateSdk, 
+            IKubernetesSdk kubernetesSdk, 
+            IOptions<Settings> passwordstateSettings)
         {
             this.logger = logger;
             this.passwordstateSdk = passwordstateSdk;
             this.kubernetesSdk = kubernetesSdk;
+            this.settings = passwordstateSettings.Value;
         }
 
         public async Task OnAdded(PasswordListCrd crd)
@@ -89,7 +96,7 @@ namespace PasswordstateOperator
         
         private async Task CheckCurrentStateForCrd(PasswordListCrd crd, bool sync)
         {
-            var passwordsSecret = await kubernetesSdk.GetSecretAsync(crd.Spec.PasswordsSecret, crd.Namespace());
+            var passwordsSecret = await kubernetesSdk.GetSecretAsync(crd.Spec.SecretName, crd.Namespace());
             if (passwordsSecret == null)
             {
                 logger.LogInformation($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: password secret does not exist, will create");
@@ -118,7 +125,7 @@ namespace PasswordstateOperator
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"{nameof(SyncExistingPasswordSecretWithPasswordstate)}: {crd.Id}: Got exception, will not sync password secret '{crd.Spec.PasswordsSecret}'");
+                logger.LogError(e, $"{nameof(SyncExistingPasswordSecretWithPasswordstate)}: {crd.Id}: Got exception, will not sync password secret '{crd.Spec.SecretName}'");
                 return;
             }
             
@@ -126,18 +133,18 @@ namespace PasswordstateOperator
 
             if (existingPasswordsSecret.DataEquals(newPasswordsSecret))
             {
-                logger.LogDebug($"{nameof(SyncExistingPasswordSecretWithPasswordstate)}: {crd.Id}: no changes in Passwordstate, will skip password secret '{crd.Spec.PasswordsSecret}'");
+                logger.LogDebug($"{nameof(SyncExistingPasswordSecretWithPasswordstate)}: {crd.Id}: no changes in Passwordstate, will skip password secret '{crd.Spec.SecretName}'");
             }
             else
             {
-                logger.LogInformation($"{nameof(SyncExistingPasswordSecretWithPasswordstate)}: {crd.Id}: detected changed password list in Passwordstate, will update password secret '{crd.Spec.PasswordsSecret}'");
-                await kubernetesSdk.ReplaceSecretAsync(newPasswordsSecret, crd.Spec.PasswordsSecret, crd.Namespace());
+                logger.LogInformation($"{nameof(SyncExistingPasswordSecretWithPasswordstate)}: {crd.Id}: detected changed password list in Passwordstate, will update password secret '{crd.Spec.SecretName}'");
+                await kubernetesSdk.ReplaceSecretAsync(newPasswordsSecret, crd.Spec.SecretName, crd.Namespace());
             }
         }
 
         private async Task CreatePasswordsSecret(PasswordListCrd crd)
         {
-            var existingPasswordsSecret = await kubernetesSdk.GetSecretAsync(crd.Spec.PasswordsSecret, crd.Namespace());
+            var existingPasswordsSecret = await kubernetesSdk.GetSecretAsync(crd.Spec.SecretName, crd.Namespace());
             if (existingPasswordsSecret == null)
             {
                 PasswordListResponse passwords;
@@ -147,13 +154,13 @@ namespace PasswordstateOperator
                 }
                 catch (Exception e)
                 {
-                    logger.LogError(e, $"{nameof(CreatePasswordsSecret)}: {crd.Id}: Got exception, will not create password secret '{crd.Spec.PasswordsSecret}'");
+                    logger.LogError(e, $"{nameof(CreatePasswordsSecret)}: {crd.Id}: Got exception, will not create password secret '{crd.Spec.SecretName}'");
                     return;
                 }
             
                 var passwordsSecret = BuildSecret(crd, passwords.Passwords);
 
-                logger.LogInformation($"{nameof(CreatePasswordsSecret)}: {crd.Id}: will create password secret '{crd.Spec.PasswordsSecret}'");
+                logger.LogInformation($"{nameof(CreatePasswordsSecret)}: {crd.Id}: will create password secret '{crd.Spec.SecretName}'");
                 
                 await kubernetesSdk.CreateSecretAsync(passwordsSecret, crd.Namespace());
             }
@@ -165,23 +172,23 @@ namespace PasswordstateOperator
         
         private async Task<PasswordListResponse> FetchPasswordListFromPasswordstate(PasswordListCrd crd)
         {
-            var apiKey = await GetApiKey(crd);
+            var apiKey = await GetApiKey();
 
-            return await passwordstateSdk.GetPasswordList(crd.Spec.ServerBaseUrl, crd.Spec.PasswordListId, apiKey);
+            return await passwordstateSdk.GetPasswordList(settings.ServerBaseUrl, crd.Spec.PasswordListId, apiKey);
         }
         
-        private async Task<string> GetApiKey(PasswordListCrd crd)
+        private async Task<string> GetApiKey()
         {
-            var apiKeySecret = await kubernetesSdk.GetSecretAsync(crd.Spec.ApiKeySecret, crd.Namespace());
+            var apiKeySecret = await kubernetesSdk.GetSecretAsync(settings.ApiKeySecretName, settings.ApiKeySecretNamespace);
             if (apiKeySecret == null)
             {
-                throw new ApplicationException($"{nameof(GetApiKey)}: {crd.Id}: api key secret '{crd.Spec.ApiKeySecret}' was not found");
+                throw new ApplicationException($"{nameof(GetApiKey)}: api key secret '{settings.ApiKeySecretName}' was not found in namespace '{settings.ApiKeySecretNamespace}'");
             }
 
             const string dataName = "apikey";
             if (!apiKeySecret.Data.TryGetValue(dataName, out var apiKeyBytes))
             {
-                throw new ApplicationException($"{nameof(GetApiKey)}: {crd.Id}: data field '{dataName}' was not found in api key secret '{crd.Spec.ApiKeySecret}'");
+                throw new ApplicationException($"{nameof(GetApiKey)}: data field '{dataName}' was not found in api key secret '{settings.ApiKeySecretName}'");
             }
 
             return Encoding.UTF8.GetString(apiKeyBytes);
@@ -224,7 +231,7 @@ namespace PasswordstateOperator
             {
                 ApiVersion = "v1",
                 Kind = "Secret",
-                Metadata = new V1ObjectMeta(name: crd.Spec.PasswordsSecret),
+                Metadata = new V1ObjectMeta(name: crd.Spec.SecretName),
                 StringData = flattenedPasswords
             };
         }
@@ -257,7 +264,7 @@ namespace PasswordstateOperator
 
         private async Task DeletePasswordsSecret(PasswordListCrd crd)
         {
-            await kubernetesSdk.DeleteSecretAsync(crd.Spec.PasswordsSecret, crd.Namespace());
+            await kubernetesSdk.DeleteSecretAsync(crd.Spec.SecretName, crd.Namespace());
         }
     }
 }

@@ -21,12 +21,8 @@ spec:
             spec:
               type: object
               properties:
-                serverbaseurl:
-                  type: string
                 passwordlistid:
                   type: string
-                apikeysecret:
+                secretname:
                   type: string
-                passwordssecret:
-                  type: string
-              required: ["serverbaseurl","passwordlistid", "apikeysecret", "passwordssecret"]
+              required: ["passwordlistid", "secretname"]

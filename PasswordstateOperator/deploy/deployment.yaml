@@ -17,3 +17,19 @@ spec:
       containers:
         - name: passwordstate-operator
           image: %%image%%
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "%%environment%%"
+            - name: SERVER_BASE_URL
+              value: "%%serverBaseUrl%%"
+            - name: API_KEY_SECRET_NAME
+              value: "apikey"
+            - name: API_KEY_SECRET_NAMESPACE
+              value: "%%apiKeySecretNamespace%%"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "apikey"
+stringData:
+  apikey: "%%apikey%%"

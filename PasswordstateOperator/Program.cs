@@ -11,7 +11,6 @@ namespace PasswordstateOperator
     {
         public static void Main(string[] args)
         {
-            //TODO: move passwordstate server related config from crd to global config (appsettings?)
             //TODO: auto restart deployments
             //TODO: test run in cluster
             //TODO: unit tests 
@@ -36,6 +35,7 @@ namespace PasswordstateOperator
                     services.AddTransient<PasswordstateSdk>();
                     services.AddTransient<IRestClientFactory, RestClientFactory>();
                     services.AddTransient<IKubernetesSdk, KubernetesSdk>();
+                    services.AddTransient<Settings>();
                 });
     }
 }
