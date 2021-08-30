@@ -23,5 +23,7 @@ namespace PasswordstateOperator.Kubernetes
         Task ReplaceSecretAsync(V1Secret newSecret, string name, string @namespace);
         
         Task DeleteSecretAsync(string name, string @namespace);
+        
+        Task RestartDeployment(string name, string @namespace);
     }
 }

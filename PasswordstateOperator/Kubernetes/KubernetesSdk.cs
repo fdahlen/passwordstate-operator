@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
 using k8s;
 using k8s.Models;
+using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.Extensions.Logging;
 using Microsoft.Rest;
 
@@ -105,6 +107,21 @@ namespace PasswordstateOperator.Kubernetes
                 logger.LogError(ex, $"{nameof(DeleteSecretAsync)}: Failed to delete secret with name {name} in namespace {@namespace}");
                 throw;
             }
+        }
+
+        public async Task RestartDeployment(string name, string @namespace)
+        {
+            var deployment = await kubernetes.ReadNamespacedDeploymentAsync(name, @namespace);
+            var annotationsWithRestart = new Dictionary<string, string>(deployment.Metadata.Annotations)
+            {
+                ["kubectl.kubernetes.io/restartedAt"] = DateTime.UtcNow.ToString("s")
+            };
+            
+            var jsonPatch = new JsonPatchDocument<V1Deployment>();
+            jsonPatch.Replace(e => e.Spec.Template.Metadata.Annotations, annotationsWithRestart);
+            var patch = new V1Patch(jsonPatch, V1Patch.PatchType.JsonPatch);
+            
+            await kubernetes.PatchNamespacedDeploymentAsync(patch, name, @namespace);
         }
     }
 }

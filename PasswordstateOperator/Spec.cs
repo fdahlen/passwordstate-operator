@@ -4,10 +4,11 @@ namespace PasswordstateOperator
     {
         public string PasswordListId { get; set; }
         public string SecretName { get; set; }
+        public string AutorestartDeploymentName { get; set; } = null;
 
         public override string ToString()
         {
-            return $"{PasswordListId}:{SecretName}"; 
+            return $"{PasswordListId}:{SecretName}:{AutorestartDeploymentName}"; 
         }
         
         public override bool Equals(object obj)

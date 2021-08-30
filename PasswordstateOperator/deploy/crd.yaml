@@ -25,4 +25,6 @@ spec:
                   type: string
                 secretname:
                   type: string
+                autorestartdeploymentname:
+                  type: string
               required: ["passwordlistid", "secretname"]

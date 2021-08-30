@@ -93,28 +93,38 @@ namespace PasswordstateOperator
                 await CheckCurrentStateForCrd(crd, sync);
             }
 
-            previousSyncTime = DateTimeOffset.UtcNow;
+            if (sync)
+            {
+                previousSyncTime = DateTimeOffset.UtcNow;
+            }
         }
         
         private async Task CheckCurrentStateForCrd(PasswordListCrd crd, bool sync)
         {
-            var passwordsSecret = await kubernetesSdk.GetSecretAsync(crd.Spec.SecretName, crd.Namespace());
-            if (passwordsSecret == null)
+            try
             {
-                logger.LogInformation($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: password secret does not exist, will create");
-
-                await CreatePasswordsSecret(crd);
-            }
-            else
-            {
-                logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: password secret exists");
-
-                if (sync)
+                var passwordsSecret = await kubernetesSdk.GetSecretAsync(crd.Spec.SecretName, crd.Namespace());
+                if (passwordsSecret == null)
                 {
-                    logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: will sync");
+                    logger.LogInformation($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: password secret does not exist, will create");
 
-                    await SyncExistingPasswordSecretWithPasswordstate(crd, passwordsSecret);
+                    await CreatePasswordsSecret(crd);
                 }
+                else
+                {
+                    logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: password secret exists");
+
+                    if (sync)
+                    {
+                        logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: will sync");
+
+                        await SyncExistingPasswordSecretWithPasswordstate(crd, passwordsSecret);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, $"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: Failure");
             }
         }
         
@@ -141,6 +151,12 @@ namespace PasswordstateOperator
             {
                 logger.LogInformation($"{nameof(SyncExistingPasswordSecretWithPasswordstate)}: {crd.Id}: detected changed password list in Passwordstate, will update password secret '{crd.Spec.SecretName}'");
                 await kubernetesSdk.ReplaceSecretAsync(newPasswordsSecret, crd.Spec.SecretName, crd.Namespace());
+
+                if (crd.Spec.AutorestartDeploymentName != null)
+                {
+                    logger.LogInformation($"{nameof(SyncExistingPasswordSecretWithPasswordstate)}: {crd.Id}: will restart deployment '{crd.Spec.AutorestartDeploymentName}'");
+                    await kubernetesSdk.RestartDeployment(crd.Spec.AutorestartDeploymentName, crd.Namespace());
+                }
             }
         }
 
@@ -267,6 +283,12 @@ namespace PasswordstateOperator
 
             await DeletePasswordsSecret(existingCrd);
             await CreatePasswordsSecret(newCrd);
+            
+            if (newCrd.Spec.AutorestartDeploymentName != null)
+            {
+                logger.LogInformation($"{nameof(SyncExistingPasswordSecretWithPasswordstate)}: {newCrd.Id}: will restart deployment '{newCrd.Spec.AutorestartDeploymentName}'");
+                await kubernetesSdk.RestartDeployment(newCrd.Spec.AutorestartDeploymentName, newCrd.Namespace());
+            }
         }
 
         private async Task DeletePasswordsSecret(PasswordListCrd crd)
