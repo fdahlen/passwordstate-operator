@@ -1,27 +1,35 @@
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace PasswordstateOperator.Cache
 {
     public class CacheManager
     {
-        private readonly ConcurrentDictionary<string, SemaphoreSlim> guards = new();
-        private readonly ConcurrentDictionary<string, CacheEntry> cache = new();
-
-        public async Task<CacheLock> GetLock(string id)
+        private readonly ConcurrentDictionary<string, PasswordListCrd> cache = new();
+        
+        public void AddOrUpdate(string id, PasswordListCrd crd)
         {
-            var guard = guards.GetOrAdd(id, new SemaphoreSlim(1, 1));
-            await guard.WaitAsync();
-
-            return new CacheLock(id, guard, cache);
+            cache.AddOrUpdate(id, crd, (_, _) => crd);
         }
 
-        public List<string> GetCachedIds()
+        public PasswordListCrd Get(string id)
         {
-            return guards.Keys.ToList();
+            return cache.TryGetValue(id, out var crd) ? crd : null;
+        }
+        
+        public IList<PasswordListCrd> List()
+        {
+            return cache.Values.ToList();
+        }
+        
+        public void Delete(string id)
+        {
+            if (!cache.TryRemove(id, out _))
+            {
+                throw new ApplicationException($"Failed to remove id '{id}' from cache");
+            }
         }
     }
 }

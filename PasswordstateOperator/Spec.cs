@@ -8,11 +8,10 @@ namespace PasswordstateOperator
         public string PasswordListId { get; set; }
         public string ApiKeySecret { get; set; }
         public string PasswordsSecret { get; set; }
-        public int SyncIntervalSeconds { get; set; } = 60;
 
         public override string ToString()
         {
-            return $"{ServerBaseUrl}:{PasswordListId}:{ApiKeySecret}:{PasswordsSecret}:{SyncIntervalSeconds}"; 
+            return $"{ServerBaseUrl}:{PasswordListId}:{ApiKeySecret}:{PasswordsSecret}"; 
         }
         
         public override bool Equals(object obj)
