@@ -26,6 +26,8 @@ spec:
               value: "apikey"
             - name: API_KEY_SECRET_NAMESPACE
               value: "%%apiKeySecretNamespace%%"
+            - name: SYNC_INTERVAL_SECONDS
+              value: "%%syncIntervalSeconds%%"
 ---
 apiVersion: v1
 kind: Secret

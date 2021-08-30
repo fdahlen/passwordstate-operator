@@ -15,14 +15,14 @@ namespace PasswordstateOperator
 {
     public class OperationHandler
     {
-        private const int SyncIntervalSeconds = 60;
-
         private readonly DateTimeOffset previousSyncTime = DateTimeOffset.MinValue;
         private readonly ILogger<OperationHandler> logger;
         private readonly CacheManager cacheManager = new();
         private readonly PasswordstateSdk passwordstateSdk;
         private readonly IKubernetesSdk kubernetesSdk;
         private readonly Settings settings;
+        
+        private string apiKey;
 
         public OperationHandler(
             ILogger<OperationHandler> logger, 
@@ -82,10 +82,10 @@ namespace PasswordstateOperator
         {
             logger.LogDebug(nameof(CheckCurrentState));
             
-            var sync = DateTimeOffset.UtcNow >= previousSyncTime.AddSeconds(SyncIntervalSeconds);
+            var sync = DateTimeOffset.UtcNow >= previousSyncTime.AddSeconds(settings.SyncIntervalSeconds);
             if (sync)
             {
-                logger.LogDebug($"{nameof(CheckCurrentState)}: {SyncIntervalSeconds}s has passed, will sync with Passwordstate");
+                logger.LogDebug($"{nameof(CheckCurrentState)}: {settings.SyncIntervalSeconds}s has passed, will sync with Passwordstate");
             }
 
             foreach (var crd in cacheManager.List())
@@ -172,13 +172,16 @@ namespace PasswordstateOperator
         
         private async Task<PasswordListResponse> FetchPasswordListFromPasswordstate(PasswordListCrd crd)
         {
-            var apiKey = await GetApiKey();
-
-            return await passwordstateSdk.GetPasswordList(settings.ServerBaseUrl, crd.Spec.PasswordListId, apiKey);
+            return await passwordstateSdk.GetPasswordList(settings.ServerBaseUrl, crd.Spec.PasswordListId, await GetApiKey());
         }
-        
+
         private async Task<string> GetApiKey()
         {
+            if (apiKey != null)
+            {
+                return apiKey;
+            }
+            
             var apiKeySecret = await kubernetesSdk.GetSecretAsync(settings.ApiKeySecretName, settings.ApiKeySecretNamespace);
             if (apiKeySecret == null)
             {
@@ -191,7 +194,9 @@ namespace PasswordstateOperator
                 throw new ApplicationException($"{nameof(GetApiKey)}: data field '{dataName}' was not found in api key secret '{settings.ApiKeySecretName}'");
             }
 
-            return Encoding.UTF8.GetString(apiKeyBytes);
+            apiKey = Encoding.UTF8.GetString(apiKeyBytes);
+
+            return apiKey;
         }
 
         private V1Secret BuildSecret(PasswordListCrd crd, List<Password> passwords)
