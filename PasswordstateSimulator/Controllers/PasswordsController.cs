@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
 
 namespace PasswordstateSimulator.Controllers
@@ -24,7 +25,10 @@ namespace PasswordstateSimulator.Controllers
                     Title = "DB",
                     UserName = "username",
                     Password = "P@ssword!",
-                    GenericField1 = $"List ID {listId}"
+                    GenericField1 = $"List ID {listId}",
+                    GenericField2 = Convert.ToBoolean(Environment.GetEnvironmentVariable("ALWAYS_NEW_DATA")) 
+                        ? new Random().Next().ToString() 
+                        : ""
                 },
                 new PasswordItem
                 {

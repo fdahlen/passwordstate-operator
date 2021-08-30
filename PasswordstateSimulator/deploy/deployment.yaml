@@ -35,3 +35,5 @@ spec:
               value: Development
             - name: LISTEN_URL
               value: %%url%%
+            - name: ALWAYS_NEW_DATA
+              value: true
