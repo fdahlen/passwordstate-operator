@@ -15,13 +15,13 @@ namespace PasswordstateOperator
 {
     public class OperationHandler
     {
-        private readonly DateTimeOffset previousSyncTime = DateTimeOffset.MinValue;
         private readonly ILogger<OperationHandler> logger;
         private readonly CacheManager cacheManager = new();
         private readonly PasswordstateSdk passwordstateSdk;
         private readonly IKubernetesSdk kubernetesSdk;
         private readonly Settings settings;
         
+        private DateTimeOffset previousSyncTime = DateTimeOffset.MinValue;
         private string apiKey;
 
         public OperationHandler(
@@ -92,6 +92,8 @@ namespace PasswordstateOperator
             {
                 await CheckCurrentStateForCrd(crd, sync);
             }
+
+            previousSyncTime = DateTimeOffset.UtcNow;
         }
         
         private async Task CheckCurrentStateForCrd(PasswordListCrd crd, bool sync)
