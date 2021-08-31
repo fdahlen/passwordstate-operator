@@ -113,12 +113,12 @@ namespace PasswordstateOperator
             await handler.OnBookmarked(crd);
             break;
           default:
-            throw new ArgumentOutOfRangeException(nameof(type), type, null);
+            throw new ArgumentOutOfRangeException(nameof(type), type, $"Unsupported {nameof(WatchEventType)}");
         }
       }
       catch (Exception ex)
       {
-        logger.LogError(ex, $"{nameof(OnChange)}: Exception for {nameof(PasswordListCrd)} '{crd.Name()}' event {(object) type} in namespace {crd.Namespace()}");
+        logger.LogError(ex, $"{nameof(OnChange)}: {crd.Id}: Failure");
       }
     }
 

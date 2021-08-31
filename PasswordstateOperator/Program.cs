@@ -11,7 +11,6 @@ namespace PasswordstateOperator
     {
         public static void Main(string[] args)
         {
-            //TODO: auto restart deployments
             //TODO: test run in cluster
             //TODO: unit tests 
 

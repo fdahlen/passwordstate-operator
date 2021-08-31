@@ -130,17 +130,7 @@ namespace PasswordstateOperator
         
         private async Task SyncExistingPasswordSecretWithPasswordstate(PasswordListCrd crd, V1Secret existingPasswordsSecret)
         {
-            PasswordListResponse newPasswords;
-            try
-            {
-                newPasswords = await FetchPasswordListFromPasswordstate(crd);
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, $"{nameof(SyncExistingPasswordSecretWithPasswordstate)}: {crd.Id}: Got exception, will not sync password secret '{crd.Spec.SecretName}'");
-                return;
-            }
-            
+            var newPasswords = await FetchPasswordListFromPasswordstate(crd);
             var newPasswordsSecret = BuildSecret(crd, newPasswords.Passwords);
 
             if (existingPasswordsSecret.DataEquals(newPasswordsSecret))
@@ -286,7 +276,7 @@ namespace PasswordstateOperator
             
             if (newCrd.Spec.AutorestartDeploymentName != null)
             {
-                logger.LogInformation($"{nameof(SyncExistingPasswordSecretWithPasswordstate)}: {newCrd.Id}: will restart deployment '{newCrd.Spec.AutorestartDeploymentName}'");
+                logger.LogInformation($"{nameof(UpdatePasswordsSecret)}: {newCrd.Id}: will restart deployment '{newCrd.Spec.AutorestartDeploymentName}'");
                 await kubernetesSdk.RestartDeployment(newCrd.Spec.AutorestartDeploymentName, newCrd.Namespace());
             }
         }
