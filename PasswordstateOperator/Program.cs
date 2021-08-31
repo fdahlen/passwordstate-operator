@@ -11,6 +11,7 @@ namespace PasswordstateOperator
     {
         public static void Main(string[] args)
         {
+            //TODO: move global settings to config map?
             //TODO: test run in cluster
             //TODO: unit tests 
 

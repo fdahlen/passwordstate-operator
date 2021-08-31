@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -185,26 +186,17 @@ namespace PasswordstateOperator
 
         private async Task<string> GetApiKey()
         {
-            if (apiKey != null)
+            if (apiKey == null)
             {
-                return apiKey;
-            }
-            
-            var apiKeySecret = await kubernetesSdk.GetSecretAsync(settings.ApiKeySecretName, settings.ApiKeySecretNamespace);
-            if (apiKeySecret == null)
-            {
-                throw new ApplicationException($"{nameof(GetApiKey)}: api key secret '{settings.ApiKeySecretName}' was not found in namespace '{settings.ApiKeySecretNamespace}'");
-            }
+                apiKey = await File.ReadAllTextAsync(settings.ApiKeyPath);
 
-            const string dataName = "apikey";
-            if (!apiKeySecret.Data.TryGetValue(dataName, out var apiKeyBytes))
-            {
-                throw new ApplicationException($"{nameof(GetApiKey)}: data field '{dataName}' was not found in api key secret '{settings.ApiKeySecretName}'");
+                if (string.IsNullOrEmpty(apiKey))
+                {
+                    throw new ApplicationException($"{nameof(GetApiKey)}: api key file was empty '{settings.ApiKeyPath}'");
+                }
             }
 
-            apiKey = Encoding.UTF8.GetString(apiKeyBytes);
-
-            return apiKey;
+            return apiKey; 
         }
 
         private V1Secret BuildSecret(PasswordListCrd crd, List<Password> passwords)

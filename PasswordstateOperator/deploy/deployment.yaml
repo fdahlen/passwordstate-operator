@@ -22,12 +22,19 @@ spec:
               value: "%%environment%%"
             - name: SERVER_BASE_URL
               value: "%%serverBaseUrl%%"
-            - name: API_KEY_SECRET_NAME
-              value: "apikey"
-            - name: API_KEY_SECRET_NAMESPACE
-              value: "%%apiKeySecretNamespace%%"
+            - name: API_KEY_PATH
+              value: "/mnt/apikey"
             - name: SYNC_INTERVAL_SECONDS
               value: "%%syncIntervalSeconds%%"
+          volumeMounts:
+            - name: apikey-volume
+              mountPath: /mnt/apikey
+              subPath: apikey
+              readOnly: true
+      volumes:
+        - name: apikey-volume
+          secret:
+            secretName: "apikey"
 ---
 apiVersion: v1
 kind: Secret
