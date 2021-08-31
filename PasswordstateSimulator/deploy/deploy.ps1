@@ -1,8 +1,6 @@
-$namespace = "passwordstate-simulator"
+$namespace = "simulator"
 $image = "ghcr.io/fdahlen/passwordstate-operator-simulator:latest"
-$url = "http://passwordstatesimulator.passwordstate-simulator.svc.cluster.local"
-
-#$image = "nginxdemos/hello:plain-text"
+$url = "http://passwordstatesimulator.$namespace.svc.cluster.local"
 
 (Get-Content deployment.yaml).
     replace('%%image%%', $image).
@@ -11,6 +9,3 @@ $url = "http://passwordstatesimulator.passwordstate-simulator.svc.cluster.local"
 
 (Get-Content service.yaml) |
     kubectl apply -n $namespace -f -
-
-# passwordstatesimulator.passwordstate-simulator.svc.cluster.local/api/passwords/123
-# kubectl run -i --tty --rm debug --image=busybox --restart=Never -- sh

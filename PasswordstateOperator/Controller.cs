@@ -91,7 +91,7 @@ namespace PasswordstateOperator
 
     private async void OnChange(WatchEventType type, PasswordListCrd crd)
     {
-      logger.LogInformation($"{nameof(OnChange)}: {nameof(PasswordListCrd)} '{crd.Id}' event {(object) type} in namespace {crd.Namespace()}");
+      logger.LogInformation($"{nameof(OnChange)}: {type}: '{crd.Id}'");
       
       try
       {
@@ -118,7 +118,7 @@ namespace PasswordstateOperator
       }
       catch (Exception ex)
       {
-        logger.LogError(ex, $"{nameof(OnChange)}: {crd.Id}: Failure");
+        logger.LogError(ex, $"{nameof(OnChange)}: {type}: {crd.Id}: Failure");
       }
     }
 

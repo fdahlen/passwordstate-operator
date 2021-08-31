@@ -143,10 +143,10 @@ namespace PasswordstateOperator
                 logger.LogInformation($"{nameof(SyncExistingPasswordSecretWithPasswordstate)}: {crd.Id}: detected changed password list in Passwordstate, will update password secret '{crd.Spec.SecretName}'");
                 await kubernetesSdk.ReplaceSecretAsync(newPasswordsSecret, crd.Spec.SecretName, crd.Namespace());
 
-                if (crd.Spec.AutorestartDeploymentName != null)
+                if (crd.Spec.AutoRestartDeploymentName != null)
                 {
-                    logger.LogInformation($"{nameof(SyncExistingPasswordSecretWithPasswordstate)}: {crd.Id}: will restart deployment '{crd.Spec.AutorestartDeploymentName}'");
-                    await kubernetesSdk.RestartDeployment(crd.Spec.AutorestartDeploymentName, crd.Namespace());
+                    logger.LogInformation($"{nameof(SyncExistingPasswordSecretWithPasswordstate)}: {crd.Id}: will restart deployment '{crd.Spec.AutoRestartDeploymentName}'");
+                    await kubernetesSdk.RestartDeployment(crd.Spec.AutoRestartDeploymentName, crd.Namespace());
                 }
             }
         }
@@ -266,10 +266,10 @@ namespace PasswordstateOperator
             await DeletePasswordsSecret(existingCrd);
             await CreatePasswordsSecret(newCrd);
             
-            if (newCrd.Spec.AutorestartDeploymentName != null)
+            if (newCrd.Spec.AutoRestartDeploymentName != null)
             {
-                logger.LogInformation($"{nameof(UpdatePasswordsSecret)}: {newCrd.Id}: will restart deployment '{newCrd.Spec.AutorestartDeploymentName}'");
-                await kubernetesSdk.RestartDeployment(newCrd.Spec.AutorestartDeploymentName, newCrd.Namespace());
+                logger.LogInformation($"{nameof(UpdatePasswordsSecret)}: {newCrd.Id}: will restart deployment '{newCrd.Spec.AutoRestartDeploymentName}'");
+                await kubernetesSdk.RestartDeployment(newCrd.Spec.AutoRestartDeploymentName, newCrd.Namespace());
             }
         }
 

@@ -29,7 +29,7 @@ spec:
           volumeMounts:
             - name: apikey-volume
               mountPath: /mnt/apikey
-              subPath: apikey
+              subPath: apiKey
               readOnly: true
       volumes:
         - name: apikey-volume
@@ -41,4 +41,4 @@ kind: Secret
 metadata:
   name: "apikey"
 stringData:
-  apikey: "%%apikey%%"
+  apiKey: "%%apiKey%%"

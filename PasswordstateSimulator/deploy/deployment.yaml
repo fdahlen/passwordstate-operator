@@ -32,8 +32,8 @@ spec:
               memory: 1024Mi
           env:
             - name: ASPNETCORE_ENVIRONMENT
-              value: Development
+              value: "Development"
             - name: LISTEN_URL
-              value: %%url%%
+              value: "%%url%%"
             - name: ALWAYS_NEW_DATA
-              value: true
+              value: "true"

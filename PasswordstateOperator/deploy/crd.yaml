@@ -21,10 +21,10 @@ spec:
             spec:
               type: object
               properties:
-                passwordlistid:
+                passwordListId:
                   type: string
-                secretname:
+                secretName:
                   type: string
-                autorestartdeploymentname:
+                autoRestartDeploymentName:
                   type: string
-              required: ["passwordlistid", "secretname"]
+              required: ["passwordListId", "secretName"]
