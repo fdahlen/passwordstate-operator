@@ -2,7 +2,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using k8s;
-using k8s.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PasswordstateOperator.Kubernetes;
@@ -74,7 +73,15 @@ namespace PasswordstateOperator
       
       while (!stoppingToken.IsCancellationRequested)
       {
-        await Task.Delay(ReconciliationCheckIntervalSeconds * 1000);
+        try
+        {
+          await Task.Delay(ReconciliationCheckIntervalSeconds * 1000, stoppingToken);
+        }
+        catch (TaskCanceledException)
+        {
+          logger.LogInformation($"{nameof(ReconciliationLoop)}: Cancellation requested for stopping token, reconciliation loop aborted");
+        }
+        
         await handler.CheckCurrentState();
       }
     }

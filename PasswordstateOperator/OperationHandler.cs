@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using k8s.Models;
@@ -62,7 +61,7 @@ namespace PasswordstateOperator
 
             cacheManager.Delete(crd.Id);
             
-            await DeletePasswordsSecret(crd);
+            await kubernetesSdk.DeleteSecretAsync(crd.Spec.SecretName, crd.Namespace());
         }
 
         public Task OnBookmarked(PasswordListCrd crd)
@@ -263,7 +262,7 @@ namespace PasswordstateOperator
 
             logger.LogInformation($"{nameof(UpdatePasswordsSecret)}: {newCrd.Id}: detected updated crd, will delete existing password secret and create new");
 
-            await DeletePasswordsSecret(existingCrd);
+            await kubernetesSdk.DeleteSecretAsync(existingCrd.Spec.SecretName, existingCrd.Namespace());
             await CreatePasswordsSecret(newCrd);
             
             if (newCrd.Spec.AutoRestartDeploymentName != null)
@@ -271,11 +270,6 @@ namespace PasswordstateOperator
                 logger.LogInformation($"{nameof(UpdatePasswordsSecret)}: {newCrd.Id}: will restart deployment '{newCrd.Spec.AutoRestartDeploymentName}'");
                 await kubernetesSdk.RestartDeployment(newCrd.Spec.AutoRestartDeploymentName, newCrd.Namespace());
             }
-        }
-
-        private async Task DeletePasswordsSecret(PasswordListCrd crd)
-        {
-            await kubernetesSdk.DeleteSecretAsync(crd.Spec.SecretName, crd.Namespace());
         }
     }
 }
