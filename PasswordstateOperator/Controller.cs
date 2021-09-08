@@ -14,7 +14,6 @@ namespace PasswordstateOperator
 
     private readonly OperationHandler handler;
     private Watcher<PasswordListCrd> watcher;
-    private readonly string k8sNamespace;
 
     private readonly IKubernetesSdk kubernetesSdk;
     
@@ -24,7 +23,6 @@ namespace PasswordstateOperator
     {
       this.handler = handler;
       this.logger = logger;
-      k8sNamespace = "";
       this.kubernetesSdk = kubernetesSdk;
     }
 
@@ -60,7 +58,6 @@ namespace PasswordstateOperator
       watcher = kubernetesSdk.WatchCustomResources(
           PasswordListCrd.ApiGroup,
           PasswordListCrd.ApiVersion,
-          k8sNamespace,
           PasswordListCrd.Plural,
           new Action<WatchEventType, PasswordListCrd>(OnChange),
           OnError,

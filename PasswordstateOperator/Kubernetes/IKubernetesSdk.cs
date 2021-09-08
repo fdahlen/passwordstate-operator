@@ -10,7 +10,6 @@ namespace PasswordstateOperator.Kubernetes
         Watcher<TCrd> WatchCustomResources<TCrd>(
             string group,
             string version,
-            string @namespace,
             string plural,
             Action<WatchEventType, TCrd> onChange,
             Action<Exception> onError,

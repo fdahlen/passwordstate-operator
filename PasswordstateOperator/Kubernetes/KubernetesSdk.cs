@@ -25,16 +25,17 @@ namespace PasswordstateOperator.Kubernetes
         public Watcher<TCrd> WatchCustomResources<TCrd>(
             string group,
             string version,
-            string @namespace,
             string plural,
             Action<WatchEventType, TCrd> onChange,
             Action<Exception> onError,
             Action onClose)
         {
+            const string allNamespaces = "";
+
             var watcher = kubernetes.ListNamespacedCustomObjectWithHttpMessagesAsync(
                     group,
                     version,
-                    @namespace,
+                    allNamespaces,
                     plural,
                     watch: true)
                 .Watch(
@@ -42,7 +43,7 @@ namespace PasswordstateOperator.Kubernetes
                     onError,
                     onClose);
             
-            logger.LogDebug($"{nameof(WatchCustomResources)}: Watcher created for {plural} resources in namespace {@namespace}");
+            logger.LogDebug($"{nameof(WatchCustomResources)}: Watcher created for {plural}");
             
             return watcher;
         }
