@@ -1,8 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using k8s.Models;
 using Microsoft.Extensions.Logging;
@@ -19,20 +16,22 @@ namespace PasswordstateOperator
         private readonly CacheManager cacheManager = new();
         private readonly PasswordstateSdk passwordstateSdk;
         private readonly IKubernetesSdk kubernetesSdk;
+        private readonly SecretsBuilder secretsBuilder;
         private readonly Settings settings;
         
         private DateTimeOffset previousSyncTime = DateTimeOffset.MinValue;
-        private string apiKey;
 
         public OperationHandler(
             ILogger<OperationHandler> logger, 
             PasswordstateSdk passwordstateSdk, 
             IKubernetesSdk kubernetesSdk, 
+            SecretsBuilder secretsBuilder,            
             IOptions<Settings> passwordstateSettings)
         {
             this.logger = logger;
             this.passwordstateSdk = passwordstateSdk;
             this.kubernetesSdk = kubernetesSdk;
+            this.secretsBuilder = secretsBuilder;
             this.settings = passwordstateSettings.Value;
         }
 
@@ -81,7 +80,7 @@ namespace PasswordstateOperator
         public async Task CheckCurrentState()
         {
             logger.LogDebug(nameof(CheckCurrentState));
-            
+
             var sync = DateTimeOffset.UtcNow >= previousSyncTime.AddSeconds(settings.SyncIntervalSeconds);
             if (sync)
             {
@@ -90,7 +89,14 @@ namespace PasswordstateOperator
 
             foreach (var crd in cacheManager.List())
             {
-                await CheckCurrentStateForCrd(crd, sync);
+                try
+                {
+                    await CheckCurrentStateForCrd(crd, sync);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, $"{nameof(CheckCurrentState)}: {crd.Id}: Failure");
+                }
             }
 
             if (sync)
@@ -98,40 +104,37 @@ namespace PasswordstateOperator
                 previousSyncTime = DateTimeOffset.UtcNow;
             }
         }
-        
+
         private async Task CheckCurrentStateForCrd(PasswordListCrd crd, bool sync)
         {
-            try
+            var passwordsSecret = await kubernetesSdk.GetSecretAsync(crd.Spec.SecretName, crd.Namespace());
+            if (passwordsSecret == null)
             {
-                var passwordsSecret = await kubernetesSdk.GetSecretAsync(crd.Spec.SecretName, crd.Namespace());
-                if (passwordsSecret == null)
-                {
-                    logger.LogInformation($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: password secret does not exist, will create");
+                logger.LogInformation($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: password secret does not exist, will create");
 
-                    await CreatePasswordsSecret(crd);
-                }
-                else
-                {
-                    logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: password secret exists");
-
-                    if (sync)
-                    {
-                        logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: will sync");
-
-                        await SyncExistingPasswordSecretWithPasswordstate(crd, passwordsSecret);
-                    }
-                }
+                await CreatePasswordsSecret(crd);
             }
-            catch (Exception ex)
+            else
             {
-                logger.LogError(ex, $"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: Failure");
+                logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: password secret exists");
+
+                if (sync)
+                {
+                    logger.LogDebug($"{nameof(CheckCurrentStateForCrd)}: {crd.Id}: will sync");
+
+                    await SyncExistingPasswordSecretWithPasswordstate(crd, passwordsSecret);
+                }
             }
         }
-        
+
         private async Task SyncExistingPasswordSecretWithPasswordstate(PasswordListCrd crd, V1Secret existingPasswordsSecret)
         {
-            var newPasswords = await FetchPasswordListFromPasswordstate(crd);
-            var newPasswordsSecret = BuildSecret(crd, newPasswords.Passwords);
+            var newPasswords = await passwordstateSdk.GetPasswordList(
+                settings.ServerBaseUrl, 
+                crd.Spec.PasswordListId, 
+                await GetApiKey());
+            
+            var newPasswordsSecret = secretsBuilder.BuildPasswordsSecret(crd, newPasswords.Passwords);
 
             if (existingPasswordsSecret.DataEquals(newPasswordsSecret))
             {
@@ -158,7 +161,10 @@ namespace PasswordstateOperator
                 PasswordListResponse passwords;
                 try
                 {
-                    passwords = await FetchPasswordListFromPasswordstate(crd);
+                    passwords = await passwordstateSdk.GetPasswordList(
+                        settings.ServerBaseUrl, 
+                        crd.Spec.PasswordListId, 
+                        await GetApiKey());
                 }
                 catch (Exception e)
                 {
@@ -166,7 +172,7 @@ namespace PasswordstateOperator
                     return;
                 }
             
-                var passwordsSecret = BuildSecret(crd, passwords.Passwords);
+                var passwordsSecret = secretsBuilder.BuildPasswordsSecret(crd, passwords.Passwords);
 
                 logger.LogInformation($"{nameof(CreatePasswordsSecret)}: {crd.Id}: will create password secret '{crd.Spec.SecretName}'");
                 
@@ -177,72 +183,17 @@ namespace PasswordstateOperator
                 await SyncExistingPasswordSecretWithPasswordstate(crd, existingPasswordsSecret);
             }
         }
-        
-        private async Task<PasswordListResponse> FetchPasswordListFromPasswordstate(PasswordListCrd crd)
-        {
-            return await passwordstateSdk.GetPasswordList(settings.ServerBaseUrl, crd.Spec.PasswordListId, await GetApiKey());
-        }
 
         private async Task<string> GetApiKey()
         {
-            if (apiKey == null)
-            {
-                apiKey = await File.ReadAllTextAsync(settings.ApiKeyPath);
+            var apiKey = await File.ReadAllTextAsync(settings.ApiKeyPath);
 
-                if (string.IsNullOrEmpty(apiKey))
-                {
-                    throw new ApplicationException($"{nameof(GetApiKey)}: api key file was empty '{settings.ApiKeyPath}'");
-                }
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                throw new ApplicationException($"{nameof(GetApiKey)}: api key file was empty '{settings.ApiKeyPath}'");
             }
 
-            return apiKey; 
-        }
-
-        private V1Secret BuildSecret(PasswordListCrd crd, List<Password> passwords)
-        {
-            var flattenedPasswords = new Dictionary<string, string>();
-
-            foreach (var password in passwords)
-            {
-                const string TitleField = "Title";
-                var title = password.Fields.FirstOrDefault(field => field.Name == TitleField);
-
-                if (title == null)
-                {
-                    var passwordId = password.Fields.FirstOrDefault(field => field.Name == "PasswordID");
-                    logger.LogWarning($"{nameof(BuildSecret)}: {crd.Id}: No {TitleField} found, skipping password ID {passwordId} in list ID {crd.Spec.PasswordListId}");
-                    continue;
-                }
-
-                foreach (var field in password.Fields)
-                {
-                    if (field.Name == TitleField)
-                    {
-                        continue;
-                    }
-
-                    if (string.IsNullOrEmpty(field.Value))
-                    {
-                        continue;
-                    }
-                    
-                    var key = Clean($"{title.Value}.{field.Name}");                    
-                    flattenedPasswords[key] = field.Value;
-                }
-            }
-
-            return new V1Secret
-            {
-                ApiVersion = "v1",
-                Kind = "Secret",
-                Metadata = new V1ObjectMeta(name: crd.Spec.SecretName),
-                StringData = flattenedPasswords
-            };
-        }
-        
-        private static string Clean(string secretKey)
-        {
-            return Regex.Replace(secretKey, "[^A-Za-z0-9_.-]", "").ToLower();
+            return apiKey;
         }
 
         private async Task UpdatePasswordsSecret(PasswordListCrd existingCrd, PasswordListCrd newCrd)
