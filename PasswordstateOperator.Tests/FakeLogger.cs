@@ -17,7 +17,7 @@ namespace PasswordstateOperator.Tests
         {
             return true;
         }
-        
+
         public IDisposable BeginScope<TState>(TState state)
         {
             throw new NotImplementedException();

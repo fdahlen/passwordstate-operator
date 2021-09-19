@@ -9,7 +9,7 @@ namespace PasswordstateOperator.Kubernetes
         public IKubernetes Create()
         {
             return new k8s.Kubernetes(
-                !KubernetesClientConfiguration.IsInCluster() ? KubernetesClientConfiguration.BuildConfigFromConfigFile() : KubernetesClientConfiguration.InClusterConfig(), 
+                !KubernetesClientConfiguration.IsInCluster() ? KubernetesClientConfiguration.BuildConfigFromConfigFile() : KubernetesClientConfiguration.InClusterConfig(),
                 Array.Empty<DelegatingHandler>());
         }
     }

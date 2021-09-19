@@ -17,7 +17,7 @@ namespace PasswordstateSimulator
                 {
                     webBuilder.UseStartup<Startup>();
                     webBuilder.UseUrls(
-                        "http://localhost:5000", 
+                        "http://localhost:5000",
                         Environment.GetEnvironmentVariable("LISTEN_URL"));
                 });
     }

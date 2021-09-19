@@ -13,7 +13,7 @@ namespace PasswordstateOperator.Kubernetes
     public class KubernetesSdk : IKubernetesSdk
     {
         private readonly IKubernetes kubernetes;
-        
+
         private readonly ILogger<KubernetesSdk> logger;
 
         public KubernetesSdk(IKubernetesFactory kubernetesFactory, ILogger<KubernetesSdk> logger)
@@ -42,9 +42,9 @@ namespace PasswordstateOperator.Kubernetes
                     onChange,
                     onError,
                     onClose);
-            
+
             logger.LogDebug($"{nameof(WatchCustomResources)}: Watcher created for {plural}");
-            
+
             return watcher;
         }
 
@@ -61,7 +61,7 @@ namespace PasswordstateOperator.Kubernetes
                 throw;
             }
         }
-        
+
         public async Task<V1Secret> GetSecretAsync(string name, string @namespace)
         {
             try
@@ -81,7 +81,7 @@ namespace PasswordstateOperator.Kubernetes
                 throw;
             }
         }
-        
+
         public async Task ReplaceSecretAsync(V1Secret newSecret, string name, string @namespace)
         {
             try
@@ -95,7 +95,7 @@ namespace PasswordstateOperator.Kubernetes
                 throw;
             }
         }
-        
+
         public async Task DeleteSecretAsync(string name, string @namespace)
         {
             try
@@ -117,11 +117,11 @@ namespace PasswordstateOperator.Kubernetes
             {
                 ["kubectl.kubernetes.io/restartedAt"] = DateTime.UtcNow.ToString("s")
             };
-            
+
             var jsonPatch = new JsonPatchDocument<V1Deployment>();
             jsonPatch.Replace(e => e.Spec.Template.Metadata.Annotations, annotationsWithRestart);
             var patch = new V1Patch(jsonPatch, V1Patch.PatchType.JsonPatch);
-            
+
             await kubernetes.PatchNamespacedDeploymentAsync(patch, name, @namespace);
         }
     }

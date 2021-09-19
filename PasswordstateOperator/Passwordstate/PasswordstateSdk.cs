@@ -11,12 +11,12 @@ namespace PasswordstateOperator.Passwordstate
     public class PasswordstateSdk
     {
         private readonly IRestClientFactory restClientFactory;
-        
+
         public PasswordstateSdk(IRestClientFactory restClientFactory)
         {
             this.restClientFactory = restClientFactory;
         }
-        
+
         public async Task<PasswordListResponse> GetPasswordList(string serverBaseUrl, string passwordListId, string apiKey)
         {
             var restClient = restClientFactory.New(serverBaseUrl);

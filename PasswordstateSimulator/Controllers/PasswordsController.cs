@@ -16,21 +16,21 @@ namespace PasswordstateSimulator.Controllers
             {
                 return Unauthorized();
             }
-            
+
             return Ok(new List<PasswordItem>
             {
-                new PasswordItem
+                new()
                 {
                     PasswordID = 100,
                     Title = "DB",
                     UserName = "username",
                     Password = "P@ssword!",
                     GenericField1 = $"List ID {listId}",
-                    GenericField2 = Convert.ToBoolean(Environment.GetEnvironmentVariable("ALWAYS_NEW_DATA")) 
-                        ? new Random().Next().ToString() 
+                    GenericField2 = Convert.ToBoolean(Environment.GetEnvironmentVariable("ALWAYS_NEW_DATA"))
+                        ? new Random().Next().ToString()
                         : ""
                 },
-                new PasswordItem
+                new()
                 {
                     PasswordID = 101,
                     Title = "Queues",

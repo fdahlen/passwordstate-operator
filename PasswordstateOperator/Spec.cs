@@ -8,14 +8,14 @@ namespace PasswordstateOperator
 
         public override string ToString()
         {
-            return $"{PasswordListId}:{SecretName}:{AutoRestartDeploymentName}"; 
+            return $"{PasswordListId}:{SecretName}:{AutoRestartDeploymentName}";
         }
-        
+
         public override bool Equals(object obj)
         {
             return ToString().Equals(obj?.ToString());
         }
-        
+
         public override int GetHashCode()
         {
             return ToString().GetHashCode();

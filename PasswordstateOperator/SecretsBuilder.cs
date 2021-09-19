@@ -11,7 +11,8 @@ namespace PasswordstateOperator
     {
         private readonly ILogger<SecretsBuilder> logger;
 
-        public SecretsBuilder(ILogger<SecretsBuilder> logger) {
+        public SecretsBuilder(ILogger<SecretsBuilder> logger)
+        {
             this.logger = logger;
         }
 
@@ -54,13 +55,13 @@ namespace PasswordstateOperator
                         logger.LogWarning($"{nameof(BuildPasswordsSecret)}: {crd.Id}: Invalid field name '{field.Name}' found, skipping password ID {passwordId} in list ID {crd.Spec.PasswordListId}");
                         continue;
                     }
-                    
+
                     if (string.IsNullOrEmpty(field.Value))
                     {
                         continue;
                     }
 
-                    var key = $"{cleanedTitle}.{cleanedFieldName}";                    
+                    var key = $"{cleanedTitle}.{cleanedFieldName}";
                     flattenedPasswords[key] = field.Value;
                 }
             }
@@ -73,7 +74,7 @@ namespace PasswordstateOperator
                 StringData = flattenedPasswords
             };
         }
-        
+
         private static string Clean(string secretKey)
         {
             return Regex.Replace(secretKey ?? "", "[^A-Za-z0-9_.-]", "").ToLower();

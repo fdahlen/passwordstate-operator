@@ -11,7 +11,7 @@ namespace PasswordstateOperator.Kubernetes
         {
             return GetDataContent(first) == GetDataContent(second);
         }
-        
+
         private static string GetDataContent(V1Secret secret)
         {
             if (secret.Data != null && secret.StringData != null)
@@ -20,22 +20,22 @@ namespace PasswordstateOperator.Kubernetes
             }
 
             string content = null;
-            
+
             if (secret.StringData != null)
             {
-                content = string.Join("|", secret.StringData.Select(kvp => $"{kvp.Key}:{kvp.Value}")
+                content = string.Join("|", secret.StringData
+                    .Select(kvp => $"{kvp.Key}:{kvp.Value}")
                     .OrderBy(s => s));
             }
 
             if (secret.Data != null)
             {
-                content = string.Join("|", 
-                    secret.Data
-                        .Select(kvp => $"{kvp.Key}:{Encoding.UTF8.GetString(kvp.Value)}")
-                        .OrderBy(s => s));
+                content = string.Join("|", secret.Data
+                    .Select(kvp => $"{kvp.Key}:{Encoding.UTF8.GetString(kvp.Value)}")
+                    .OrderBy(s => s));
             }
 
-            return string.IsNullOrEmpty(content) 
+            return string.IsNullOrEmpty(content)
                 ? null
                 : content;
         }

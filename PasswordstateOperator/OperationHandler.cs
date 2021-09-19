@@ -18,14 +18,14 @@ namespace PasswordstateOperator
         private readonly IKubernetesSdk kubernetesSdk;
         private readonly SecretsBuilder secretsBuilder;
         private readonly Settings settings;
-        
+
         private DateTimeOffset previousSyncTime = DateTimeOffset.MinValue;
 
         public OperationHandler(
-            ILogger<OperationHandler> logger, 
-            PasswordstateSdk passwordstateSdk, 
-            IKubernetesSdk kubernetesSdk, 
-            SecretsBuilder secretsBuilder,            
+            ILogger<OperationHandler> logger,
+            PasswordstateSdk passwordstateSdk,
+            IKubernetesSdk kubernetesSdk,
+            SecretsBuilder secretsBuilder,
             IOptions<Settings> passwordstateSettings)
         {
             this.logger = logger;
@@ -40,7 +40,7 @@ namespace PasswordstateOperator
             logger.LogInformation($"{nameof(OnAdded)}: {crd.Id}");
 
             cacheManager.AddOrUpdate(crd.Id, crd);
-            
+
             await CreatePasswordsSecret(crd);
         }
 
@@ -50,7 +50,7 @@ namespace PasswordstateOperator
 
             var existingCrd = cacheManager.Get(newCrd.Id);
             cacheManager.AddOrUpdate(newCrd.Id, newCrd);
-            
+
             await UpdatePasswordsSecret(existingCrd, newCrd);
         }
 
@@ -59,7 +59,7 @@ namespace PasswordstateOperator
             logger.LogInformation($"{nameof(OnDeleted)}: {crd.Id}");
 
             cacheManager.Delete(crd.Id);
-            
+
             await kubernetesSdk.DeleteSecretAsync(crd.Spec.SecretName, crd.Namespace());
         }
 
@@ -130,10 +130,10 @@ namespace PasswordstateOperator
         private async Task SyncExistingPasswordSecretWithPasswordstate(PasswordListCrd crd, V1Secret existingPasswordsSecret)
         {
             var newPasswords = await passwordstateSdk.GetPasswordList(
-                settings.ServerBaseUrl, 
-                crd.Spec.PasswordListId, 
+                settings.ServerBaseUrl,
+                crd.Spec.PasswordListId,
                 await GetApiKey());
-            
+
             var newPasswordsSecret = secretsBuilder.BuildPasswordsSecret(crd, newPasswords.Passwords);
 
             if (existingPasswordsSecret.DataEquals(newPasswordsSecret))
@@ -162,8 +162,8 @@ namespace PasswordstateOperator
                 try
                 {
                     passwords = await passwordstateSdk.GetPasswordList(
-                        settings.ServerBaseUrl, 
-                        crd.Spec.PasswordListId, 
+                        settings.ServerBaseUrl,
+                        crd.Spec.PasswordListId,
                         await GetApiKey());
                 }
                 catch (Exception e)
@@ -171,11 +171,11 @@ namespace PasswordstateOperator
                     logger.LogError(e, $"{nameof(CreatePasswordsSecret)}: {crd.Id}: Got exception, will not create password secret '{crd.Spec.SecretName}'");
                     return;
                 }
-            
+
                 var passwordsSecret = secretsBuilder.BuildPasswordsSecret(crd, passwords.Passwords);
 
                 logger.LogInformation($"{nameof(CreatePasswordsSecret)}: {crd.Id}: will create password secret '{crd.Spec.SecretName}'");
-                
+
                 await kubernetesSdk.CreateSecretAsync(passwordsSecret, crd.Namespace());
             }
             else
@@ -204,7 +204,7 @@ namespace PasswordstateOperator
                 await CreatePasswordsSecret(newCrd);
                 return;
             }
-            
+
             if (existingCrd.Spec.Equals(newCrd.Spec))
             {
                 logger.LogDebug($"{nameof(UpdatePasswordsSecret)}: {newCrd.Id}: identical Spec, will not update password secret");
@@ -215,7 +215,7 @@ namespace PasswordstateOperator
 
             await kubernetesSdk.DeleteSecretAsync(existingCrd.Spec.SecretName, existingCrd.Namespace());
             await CreatePasswordsSecret(newCrd);
-            
+
             if (newCrd.Spec.AutoRestartDeploymentName != null)
             {
                 logger.LogInformation($"{nameof(UpdatePasswordsSecret)}: {newCrd.Id}: will restart deployment '{newCrd.Spec.AutoRestartDeploymentName}'");

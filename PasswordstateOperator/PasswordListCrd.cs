@@ -3,7 +3,7 @@ using k8s.Models;
 
 namespace PasswordstateOperator
 {
-    public class PasswordListCrd: IMetadata<V1ObjectMeta>
+    public class PasswordListCrd : IMetadata<V1ObjectMeta>
     {
         public const string ApiGroup = "passwordstate.operator";
 
