@@ -1,10 +1,6 @@
 using System;
-using System.Buffers.Text;
-using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using k8s.Models;
 
 namespace PasswordstateOperator.Kubernetes
@@ -13,22 +9,35 @@ namespace PasswordstateOperator.Kubernetes
     {
         public static bool DataEquals(this V1Secret first, V1Secret second)
         {
-            return GetContent(first).Equals(GetContent(second));
+            return GetDataContent(first) == GetDataContent(second);
         }
         
-        private static string GetContent(V1Secret secret)
+        private static string GetDataContent(V1Secret secret)
         {
+            if (secret.Data != null && secret.StringData != null)
+            {
+                throw new ArgumentException($"Only one of {nameof(secret.Data)} and {nameof(secret.StringData)} can be specified");
+            }
+
+            string content = null;
+            
             if (secret.StringData != null)
             {
-                return string.Join("|", secret.StringData.Select(kvp => $"{kvp.Key}:{kvp.Value}").OrderBy(s => s));
+                content = string.Join("|", secret.StringData.Select(kvp => $"{kvp.Key}:{kvp.Value}")
+                    .OrderBy(s => s));
             }
 
             if (secret.Data != null)
             {
-                return string.Join("|", secret.Data.Select(kvp => $"{kvp.Key}:{Encoding.UTF8.GetString(kvp.Value)}").OrderBy(s => s));
+                content = string.Join("|", 
+                    secret.Data
+                        .Select(kvp => $"{kvp.Key}:{Encoding.UTF8.GetString(kvp.Value)}")
+                        .OrderBy(s => s));
             }
 
-            throw new ArgumentException("No data in secret");
+            return string.IsNullOrEmpty(content) 
+                ? null
+                : content;
         }
     }
 }
