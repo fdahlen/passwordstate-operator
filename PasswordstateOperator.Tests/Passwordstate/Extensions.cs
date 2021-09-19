@@ -21,7 +21,7 @@ namespace PasswordstateOperator.Tests.Passwordstate
                 {
                     var resultingField = resultingPassword.Fields[j];
                     var expectedField = expectedPassword.Fields[j];
-                    
+
                     Assert.Equal(expectedField.Name, resultingField.Name);
                     Assert.Equal(expectedField.Value, resultingField.Value);
                 }

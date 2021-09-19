@@ -5,7 +5,7 @@ using k8s.Models;
 using PasswordstateOperator.Kubernetes;
 using Xunit;
 
-namespace PasswordstateOperator.Tests.Passwordstate
+namespace PasswordstateOperator.Tests.Kubernetes
 {
     public class SecretExtensionsTests
     {
