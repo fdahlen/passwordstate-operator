@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using PasswordstateOperator.Kubernetes;
 using PasswordstateOperator.Passwordstate;
 using PasswordstateOperator.Rest;
+using YamlDotNet.Core;
 
 namespace PasswordstateOperator
 {
@@ -31,10 +32,12 @@ namespace PasswordstateOperator
                 {
                     services.AddHostedService<Controller>();
                     services.AddTransient<OperationHandler>();
-                    services.AddTransient<IKubernetesFactory, KubernetesFactory>();
-                    services.AddTransient<PasswordstateSdk>();
                     services.AddTransient<IRestClientFactory, RestClientFactory>();
+                    services.AddTransient<IKubernetesFactory, KubernetesFactory>();
                     services.AddTransient<IKubernetesSdk, KubernetesSdk>();
+                    services.AddTransient<IPasswordstateSdk, PasswordstateSdk>();
+                    services.AddTransient<PasswordsParser>();
+                    services.AddTransient<SecretsBuilder>();
                     services.AddTransient<Settings>();
                 });
     }

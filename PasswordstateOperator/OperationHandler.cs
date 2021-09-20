@@ -14,7 +14,7 @@ namespace PasswordstateOperator
     {
         private readonly ILogger<OperationHandler> logger;
         private readonly CacheManager cacheManager = new();
-        private readonly PasswordstateSdk passwordstateSdk;
+        private readonly IPasswordstateSdk passwordstateSdk;
         private readonly IKubernetesSdk kubernetesSdk;
         private readonly SecretsBuilder secretsBuilder;
         private readonly Settings settings;
@@ -23,7 +23,7 @@ namespace PasswordstateOperator
 
         public OperationHandler(
             ILogger<OperationHandler> logger,
-            PasswordstateSdk passwordstateSdk,
+            IPasswordstateSdk passwordstateSdk,
             IKubernetesSdk kubernetesSdk,
             SecretsBuilder secretsBuilder,
             IOptions<Settings> passwordstateSettings)

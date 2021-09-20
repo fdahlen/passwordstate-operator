@@ -8,13 +8,15 @@ namespace PasswordstateOperator.Passwordstate
     /// <summary>
     /// Supports Click Studios Passwordstate API version 8.9
     /// </summary>
-    public class PasswordstateSdk
+    public class PasswordstateSdk : IPasswordstateSdk
     {
         private readonly IRestClientFactory restClientFactory;
+        private readonly PasswordsParser passwordsParser;
 
-        public PasswordstateSdk(IRestClientFactory restClientFactory)
+        public PasswordstateSdk(IRestClientFactory restClientFactory, PasswordsParser passwordsParser)
         {
             this.restClientFactory = restClientFactory;
+            this.passwordsParser = passwordsParser;
         }
 
         public async Task<PasswordListResponse> GetPasswordList(string serverBaseUrl, string passwordListId, string apiKey)
@@ -34,7 +36,7 @@ namespace PasswordstateOperator.Passwordstate
             return new PasswordListResponse
             {
                 Json = result.Content,
-                Passwords = new PasswordsParser().Parse(result.Content)
+                Passwords = passwordsParser.Parse(result.Content)
             };
         }
     }

@@ -39,7 +39,7 @@ namespace PasswordstateOperator.Tests.Passwordstate
                 .Setup(factory => factory.New(serverBaseUrl))
                 .Returns(restClient.Object);
             
-            var sdk = new PasswordstateSdk(restClientFactory.Object);
+            var sdk = new PasswordstateSdk(restClientFactory.Object, new PasswordsParser());
 
             // Act
             await sdk.GetPasswordList(serverBaseUrl, passwordListId, apiKey);
@@ -97,7 +97,7 @@ namespace PasswordstateOperator.Tests.Passwordstate
                 .Setup(factory => factory.New(serverBaseUrl))
                 .Returns(restClient.Object);
             
-            var sdk = new PasswordstateSdk(restClientFactory.Object);
+            var sdk = new PasswordstateSdk(restClientFactory.Object, new PasswordsParser());
 
             // Act
             var result = await sdk.GetPasswordList(serverBaseUrl, passwordListId, apiKey);
@@ -139,7 +139,7 @@ namespace PasswordstateOperator.Tests.Passwordstate
                 .Setup(factory => factory.New(serverBaseUrl))
                 .Returns(restClient.Object);
             
-            var sdk = new PasswordstateSdk(restClientFactory.Object);
+            var sdk = new PasswordstateSdk(restClientFactory.Object, new PasswordsParser());
 
             // Act & Assert
             var exception = await Assert.ThrowsAsync<ApplicationException>(async () => await sdk.GetPasswordList(serverBaseUrl, passwordListId, apiKey));
