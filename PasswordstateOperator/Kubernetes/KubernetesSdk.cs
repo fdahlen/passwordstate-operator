@@ -110,7 +110,7 @@ namespace PasswordstateOperator.Kubernetes
             }
         }
 
-        public async Task RestartDeployment(string name, string @namespace)
+        public async Task RestartDeploymentAsync(string name, string @namespace)
         {
             var deployment = await kubernetes.ReadNamespacedDeploymentAsync(name, @namespace);
             var annotationsWithRestart = new Dictionary<string, string>(deployment.Metadata.Annotations)

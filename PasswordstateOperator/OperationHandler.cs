@@ -148,7 +148,7 @@ namespace PasswordstateOperator
                 if (crd.Spec.AutoRestartDeploymentName != null)
                 {
                     logger.LogInformation($"{nameof(SyncExistingPasswordSecretWithPasswordstate)}: {crd.Id}: will restart deployment '{crd.Spec.AutoRestartDeploymentName}'");
-                    await kubernetesSdk.RestartDeployment(crd.Spec.AutoRestartDeploymentName, crd.Namespace());
+                    await kubernetesSdk.RestartDeploymentAsync(crd.Spec.AutoRestartDeploymentName, crd.Namespace());
                 }
             }
         }
@@ -219,7 +219,7 @@ namespace PasswordstateOperator
             if (newCrd.Spec.AutoRestartDeploymentName != null)
             {
                 logger.LogInformation($"{nameof(UpdatePasswordsSecret)}: {newCrd.Id}: will restart deployment '{newCrd.Spec.AutoRestartDeploymentName}'");
-                await kubernetesSdk.RestartDeployment(newCrd.Spec.AutoRestartDeploymentName, newCrd.Namespace());
+                await kubernetesSdk.RestartDeploymentAsync(newCrd.Spec.AutoRestartDeploymentName, newCrd.Namespace());
             }
         }
     }
