@@ -103,6 +103,23 @@ namespace PasswordstateOperator.Tests.Passwordstate
         }
 
         [Fact]
+        public void OnePassword_OneGenericField_StringValue_ShouldUseDisplayNameInsteadOfGeneric()
+        {
+            ParseInternal(
+                "[\n\t{\n\t\t\"GenericField1\": \"Value\",\n\t\t\"GenericFieldInfo\": [\n\t\t\t{\n\t\t\t\t\"GenericFieldID\": \"GenericField1\",\n\t\t\t\t\"DisplayName\": \"ConnectionString\",\n\t\t\t\t\"Value\": \"Value\"\n\t\t\t}\n\t\t]\n\t}\n]", 
+                new List<Password>
+                {
+                    new()
+                    {
+                        Fields = new List<Field>
+                        {
+                            new() { Name = "ConnectionString", Value = "Value" },
+                        }
+                    }
+                });
+        }
+        
+        [Fact]
         public void MalformedJson_ShouldThrow()
         {
             // Arrange
