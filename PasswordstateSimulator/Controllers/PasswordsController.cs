@@ -22,7 +22,7 @@ namespace PasswordstateSimulator.Controllers
                 new()
                 {
                     PasswordID = 100,
-                    Title = "DB",
+                    Title = "Elastic",
                     UserName = "username",
                     Password = "P@ssword!",
                     GenericField1 = $"List ID {listId}",
@@ -33,10 +33,22 @@ namespace PasswordstateSimulator.Controllers
                 new()
                 {
                     PasswordID = 101,
-                    Title = "Queues",
-                    UserName = "username2",
-                    Password = "P@ssword!2",
-                    HostName = "queue-host"
+                    Title = "DB",
+                    GenericField1 = "connection;string",
+                    GenericField2 = Convert.ToBoolean(Environment.GetEnvironmentVariable("ALWAYS_NEW_DATA"))
+                        ? new Random().Next().ToString()
+                        : ""
+                },
+                new()
+                {
+                    PasswordID = 102,
+                    Title = "FTP",
+                    UserName = "username",
+                    Password = "P@ssword!",
+                    URL = "ftp.dummy.com",
+                    GenericField2 = Convert.ToBoolean(Environment.GetEnvironmentVariable("ALWAYS_NEW_DATA"))
+                        ? new Random().Next().ToString()
+                        : ""
                 },
             });
         }

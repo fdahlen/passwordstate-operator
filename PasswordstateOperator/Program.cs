@@ -2,9 +2,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PasswordstateOperator.Kubernetes;
+using PasswordstateOperator.Operations;
 using PasswordstateOperator.Passwordstate;
 using PasswordstateOperator.Rest;
-using YamlDotNet.Core;
 
 namespace PasswordstateOperator
 {
@@ -12,7 +12,6 @@ namespace PasswordstateOperator
     {
         public static void Main(string[] args)
         {
-            //TODO: move global settings to config map?
             //TODO: test run in cluster
             //TODO: unit tests 
 
@@ -32,6 +31,10 @@ namespace PasswordstateOperator
                 {
                     services.AddHostedService<Controller>();
                     services.AddTransient<OperationHandler>();
+                    services.AddTransient<ICreateOperation, CreateOperation>();
+                    services.AddTransient<IUpdateOperation, UpdateOperation>();
+                    services.AddTransient<IDeleteOperation, DeleteOperation>();
+                    services.AddTransient<ISyncOperation, SyncOperation>();
                     services.AddTransient<IRestClientFactory, RestClientFactory>();
                     services.AddTransient<IKubernetesFactory, KubernetesFactory>();
                     services.AddTransient<IKubernetesSdk, KubernetesSdk>();

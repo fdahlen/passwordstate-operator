@@ -5,6 +5,7 @@ using k8s;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PasswordstateOperator.Kubernetes;
+using PasswordstateOperator.Operations;
 
 namespace PasswordstateOperator
 {
