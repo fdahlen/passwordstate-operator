@@ -11,91 +11,176 @@ namespace PasswordstateOperator.Tests.Passwordstate
         public void OnePassword_OneField_StringValue()
         {
             ParseInternal(
-                "[\n\t{\n\t\t\"StringField\": \"Value\"\n\t}\n]", 
-                new List<Password>
-            {
-                new()
+                new List<PasswordsParser.PasswordItem>
                 {
-                    Fields = new List<Field>
+                    new()
                     {
-                        new() { Name = "StringField", Value = "Value" },
+                        UserName = "username"
                     }
-                }
-            });
-        }
-        
-        [Fact]
-        public void OnePassword_OneField_IntegerValue()
-        {
-            ParseInternal(
-                "[\n\t{\n\t\t\"IntegerField\": 123\n\t}\n]", 
+                },
                 new List<Password>
                 {
                     new()
                     {
                         Fields = new List<Field>
                         {
-                            new() { Name = "IntegerField", Value = "123" },
+                            new()
+                            {
+                                Name = "UserName",
+                                Value = "username"
+                            },
                         }
                     }
                 });
         }
-        
+
         [Fact]
-        public void OnePassword_OneField_NullValue_ShouldBeEmptyString()
+        public void OnePassword_OneField_IntegerValue_ShouldBeParsedAsString()
         {
             ParseInternal(
-                "[\n\t{\n\t\t\"NullField\": null\n\t}\n]", 
+                new List<PasswordsParser.PasswordItem>
+                {
+                    new()
+                    {
+                        Password = 123456
+                    }
+                },
                 new List<Password>
                 {
                     new()
                     {
                         Fields = new List<Field>
                         {
-                            new() { Name = "NullField", Value = "" },
+                            new() { Name = "Password", Value = "123456" },
                         }
                     }
                 });
         }
         
+        [Fact]
+        public void OnePassword_OneField_BooleanValue_ShouldBeParsedAsString()
+        {
+            ParseInternal(
+                new List<PasswordsParser.PasswordItem>
+                {
+                    new()
+                    {
+                        GenericField1 = false
+                    }
+                },
+                new List<Password>
+                {
+                    new()
+                    {
+                        Fields = new List<Field>
+                        {
+                            new() { Name = "GenericField1", Value = "False" },
+                        }
+                    }
+                });
+        }
+
+        [Fact]
+        public void OnePassword_OneField_ShouldIgnoreCaseOfFieldNames()
+        {
+            ParseInternal(
+                "[\n\t{\n\t\t\"uSeRnAME\": \"user\"\n\t}\n]",
+                new List<Password>
+                {
+                    new()
+                    {
+                        Fields = new List<Field>
+                        {
+                            new() { Name = "UserName", Value = "user" },
+                        }
+                    }
+                });
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        public void OnePassword_OneField_NoValue_ShouldBeExcluded(string username)
+        {
+            ParseInternal(
+                new List<PasswordsParser.PasswordItem>
+                {
+                    new()
+                    {
+                        UserName = username
+                    }
+                },
+                new List<Password>
+                {
+                    new()
+                    {
+                        Fields = new List<Field>()
+                    }
+                });
+        }
+
         [Fact]
         public void SeveralPasswords_SeveralFields_MixedValues()
         {
             ParseInternal(
-                "[\n\t{\n\t\t\"StringField1\": \"Value1\",\n\t\t\"StringField2\": \"Value2\",\n\t\t\"IntegerField\": 123,\n\t\t\"BooleanField\": true\n\t},\n\t{\n\t\t\"StringField1\": \"Value10\",\n\t\t\"IntegerField\": -123,\n\t\t\"BooleanField\": false\n\t},\n\t{\n\t\t\"String Field 3\": \"Value 3\"\n\t}\n]", 
+                new List<PasswordsParser.PasswordItem>
+                {
+                    new()
+                    {
+                        UserName = "Username",
+                        Password = 123456,
+                        AllowExport = true
+                    },
+                    new()
+                    {
+                        Password = -123456,
+                        AllowExport = false
+                    },
+                },
                 new List<Password>
                 {
                     new()
                     {
                         Fields = new List<Field>
                         {
-                            new() { Name = "StringField1", Value = "Value1" },
-                            new() { Name = "StringField2", Value = "Value2" },
-                            new() { Name = "IntegerField", Value = "123" },
-                            new() { Name = "BooleanField", Value = "True" },
+                            new()
+                            {
+                                Name = "UserName",
+                                Value = "Username"
+                            },
+                            new()
+                            {
+                                Name = "Password",
+                                Value = "123456"
+                            },
+                            new()
+                            {
+                                Name = "AllowExport",
+                                Value = "True"
+                            },
                         }
                     },
                     new()
                     {
                         Fields = new List<Field>
                         {
-                            new() { Name = "StringField1", Value = "Value10" },
-                            new() { Name = "IntegerField", Value = "-123" },
-                            new() { Name = "BooleanField", Value = "False" },
+                            new()
+                            {
+                                Name = "Password",
+                                Value = "-123456"
+                            },
+                            new()
+                            {
+                                Name = "AllowExport",
+                                Value = "False"
+                            },
                         }
-                    },
-                    new()
-                    {
-                        Fields = new List<Field>
-                        {
-                            new() { Name = "String Field 3", Value = "Value 3" },
-                        }
-                    },
+                    },                    
                 });
         }
-        
+
         [Fact]
-        public void NoPasswords()
+        public void NoPasswords_ShouldBeEmptyList()
         {
             ParseInternal(
                 "[]",
@@ -103,10 +188,24 @@ namespace PasswordstateOperator.Tests.Passwordstate
         }
 
         [Fact]
-        public void OnePassword_OneGenericField_StringValue_ShouldUseDisplayNameInsteadOfGeneric()
+        public void OnePassword_OneGenericField_StringValue_ShouldUseDisplayName()
         {
             ParseInternal(
-                "[\n\t{\n\t\t\"GenericField1\": \"Value\",\n\t\t\"GenericFieldInfo\": [\n\t\t\t{\n\t\t\t\t\"GenericFieldID\": \"GenericField1\",\n\t\t\t\t\"DisplayName\": \"ConnectionString\",\n\t\t\t\t\"Value\": \"Value\"\n\t\t\t}\n\t\t]\n\t}\n]", 
+                new List<PasswordsParser.PasswordItem>
+                {
+                    new()
+                    {
+                        GenericField1 = "Value",
+                        GenericFieldInfo = new List<PasswordsParser.GenericFieldInfoItem>
+                        {
+                            new()
+                            {
+                                GenericFieldID = "GenericField1",
+                                DisplayName = "ConnectionString"
+                            }
+                        }
+                    },
+                },
                 new List<Password>
                 {
                     new()
@@ -128,6 +227,13 @@ namespace PasswordstateOperator.Tests.Passwordstate
 
             // Act & Assert
             Assert.Throws<JsonException>(() => parser.Parse(json));
+        }
+
+        private static void ParseInternal(List<PasswordsParser.PasswordItem> input, List<Password> expected)
+        {
+            var json = JsonSerializer.Serialize(input);
+            
+            ParseInternal(json, expected);
         }
 
         private static void ParseInternal(string json, List<Password> expected)

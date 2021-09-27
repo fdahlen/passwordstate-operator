@@ -63,7 +63,7 @@ namespace PasswordstateOperator.Tests.Passwordstate
             var passwordListId = "1000";
             var apiKey = "jkdsjh3j25234q!kj";
 
-            var jsonResponse = "[\n\t{\n\t\t\"StringField1\": \"Value1\"\n\t}\n]";
+            var jsonResponse = "[\n\t{\n\t\t\"UserName\": \"Value1\"\n\t}\n]";
             var expectedObjectResponse = new List<Password>
             {
                 new()
@@ -72,7 +72,7 @@ namespace PasswordstateOperator.Tests.Passwordstate
                     {
                         new()
                         {
-                            Name = "StringField1",
+                            Name = "UserName",
                             Value = "Value1"
                         },
                     }
